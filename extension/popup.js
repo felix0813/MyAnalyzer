@@ -5,6 +5,9 @@ const endpointInputEl = document.getElementById('endpointInput');
 const saveConfigBtn = document.getElementById('saveConfigBtn');
 const sendBtn = document.getElementById('sendBtn');
 
+const DISPLAY_LIMIT = 100;
+const STORAGE_LIMIT = 5000;
+
 let currentRecords = [];
 
 function formatTime(isoString) {
@@ -25,7 +28,7 @@ function renderRecords(records, statusMessage) {
   historyListEl.innerHTML = '';
 
   if (!records.length) {
-    statusEl.textContent = statusMessage || '暂无记录。';
+    statusEl.textContent = statusMessage || `暂无记录。最多可在本地缓存 ${STORAGE_LIMIT} 条。`;
     const emptyItem = document.createElement('li');
     emptyItem.className = 'empty';
     emptyItem.textContent = '还没有捕获到浏览记录。';
@@ -33,9 +36,10 @@ function renderRecords(records, statusMessage) {
     return;
   }
 
-  statusEl.textContent = statusMessage || `共 ${records.length} 条记录（显示扩展本地缓存）`;
+  const visibleRecords = records.slice(0, DISPLAY_LIMIT);
+  statusEl.textContent = statusMessage || `共 ${records.length} 条本地缓存，当前展示最近 ${visibleRecords.length} 条，最多可存储 ${STORAGE_LIMIT} 条。`;
 
-  records.forEach((record) => {
+  visibleRecords.forEach((record) => {
     const item = document.createElement('li');
     item.className = 'item';
 
