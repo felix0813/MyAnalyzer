@@ -1,6 +1,11 @@
 const statusEl = document.getElementById('status');
 const historyListEl = document.getElementById('historyList');
 const clearBtn = document.getElementById('clearBtn');
+const endpointInputEl = document.getElementById('endpointInput');
+const saveConfigBtn = document.getElementById('saveConfigBtn');
+const sendBtn = document.getElementById('sendBtn');
+
+let currentRecords = [];
 
 function formatTime(isoString) {
   const date = new Date(isoString);
@@ -9,11 +14,18 @@ function formatTime(isoString) {
   });
 }
 
-function renderRecords(records) {
+function setBusy(isBusy) {
+  clearBtn.disabled = isBusy;
+  saveConfigBtn.disabled = isBusy;
+  sendBtn.disabled = isBusy;
+}
+
+function renderRecords(records, statusMessage) {
+  currentRecords = records;
   historyListEl.innerHTML = '';
 
   if (!records.length) {
-    statusEl.textContent = '暂无记录。';
+    statusEl.textContent = statusMessage || '暂无记录。';
     const emptyItem = document.createElement('li');
     emptyItem.className = 'empty';
     emptyItem.textContent = '还没有捕获到浏览记录。';
@@ -21,7 +33,7 @@ function renderRecords(records) {
     return;
   }
 
-  statusEl.textContent = `共 ${records.length} 条记录（显示本地缓存）`;
+  statusEl.textContent = statusMessage || `共 ${records.length} 条记录（显示扩展本地缓存）`;
 
   records.forEach((record) => {
     const item = document.createElement('li');
@@ -56,17 +68,70 @@ async function loadRecords() {
     return;
   }
 
+  endpointInputEl.value = response?.settings?.endpoint || '';
   renderRecords(response?.records || []);
 }
 
-clearBtn.addEventListener('click', async () => {
-  const response = await chrome.runtime.sendMessage({ type: 'CLEAR_HISTORY' });
-  if (response?.error) {
-    statusEl.textContent = `清空失败：${response.error}`;
-    return;
-  }
+saveConfigBtn.addEventListener('click', async () => {
+  setBusy(true);
+  statusEl.textContent = '正在保存地址...';
 
-  renderRecords([]);
+  try {
+    const response = await chrome.runtime.sendMessage({
+      type: 'SAVE_SETTINGS',
+      endpoint: endpointInputEl.value
+    });
+
+    if (response?.error) {
+      statusEl.textContent = `保存失败：${response.error}`;
+      return;
+    }
+
+    endpointInputEl.value = response?.settings?.endpoint || endpointInputEl.value.trim();
+    statusEl.textContent = '接收地址已保存。';
+  } finally {
+    setBusy(false);
+  }
+});
+
+sendBtn.addEventListener('click', async () => {
+  setBusy(true);
+  statusEl.textContent = '正在发送数据...';
+
+  try {
+    const response = await chrome.runtime.sendMessage({
+      type: 'SEND_HISTORY',
+      endpoint: endpointInputEl.value
+    });
+
+    if (response?.error) {
+      statusEl.textContent = `发送失败：${response.error}`;
+      return;
+    }
+
+    if (!response?.skipped) {
+      renderRecords([], response?.message || '发送完成。');
+    } else {
+      renderRecords(currentRecords, response?.message || '当前没有可发送的记录。');
+    }
+  } finally {
+    setBusy(false);
+  }
+});
+
+clearBtn.addEventListener('click', async () => {
+  setBusy(true);
+  try {
+    const response = await chrome.runtime.sendMessage({ type: 'CLEAR_HISTORY' });
+    if (response?.error) {
+      statusEl.textContent = `清空失败：${response.error}`;
+      return;
+    }
+
+    renderRecords([], '已清空扩展本地缓存。');
+  } finally {
+    setBusy(false);
+  }
 });
 
 loadRecords().catch((error) => {
