@@ -1,0 +1,20 @@
+{
+  "manifest_version": 3,
+  "name": "History Recorder",
+  "version": "1.0.0",
+  "description": "记录浏览器访问历史（网址和时间），并在弹出页中查看最近记录。",
+  "permissions": [
+    "history",
+    "storage"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_title": "History Recorder",
+    "default_popup": "popup.html"
+  }
+}
