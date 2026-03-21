@@ -4,9 +4,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"myanalyzer/backend/internal/database"
 )
@@ -28,16 +30,16 @@ func (h *Handler) Routes() http.Handler {
 	mux.HandleFunc("/myAnalyzer/api/history/records/", h.handleRecordByID)
 	mux.HandleFunc("/myAnalyzer/api/history/records", h.handleRecords)
 	mux.HandleFunc("/myAnalyzer/api/history", h.handleBatchImport)
-	return withJSON(mux)
+	return withLogging(withJSON(mux))
 }
 
 func (h *Handler) handleHealth(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
+		h.writeRequestError(w, r, http.StatusMethodNotAllowed, "method not allowed", nil)
 		return
 	}
 	if err := h.db.Ping(r.Context()); err != nil {
-		writeError(w, http.StatusServiceUnavailable, err.Error())
+		h.writeRequestError(w, r, http.StatusServiceUnavailable, err.Error(), err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
@@ -45,22 +47,23 @@ func (h *Handler) handleHealth(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) handleBatchImport(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
+		h.writeRequestError(w, r, http.StatusMethodNotAllowed, "method not allowed", nil)
 		return
 	}
 
 	var payload batchPayload
 	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
-		writeError(w, http.StatusBadRequest, fmt.Sprintf("invalid json: %v", err))
+		h.writeRequestError(w, r, http.StatusBadRequest, fmt.Sprintf("invalid json: %v", err), err)
 		return
 	}
 
 	inserted, err := h.repo.CreateBatch(r.Context(), payload)
 	if err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
+		h.writeRequestError(w, r, http.StatusBadRequest, err.Error(), err)
 		return
 	}
 
+	log.Printf("history batch import completed source=%q requested=%d inserted=%d", payload.Source, len(payload.Records), inserted)
 	writeJSON(w, http.StatusCreated, map[string]any{
 		"message":        "history batch imported",
 		"source":         payload.Source,
@@ -78,7 +81,7 @@ func (h *Handler) handleRecords(w http.ResponseWriter, r *http.Request) {
 
 		items, total, err := h.repo.List(r.Context(), limit, offset, search)
 		if err != nil {
-			writeError(w, http.StatusInternalServerError, err.Error())
+			h.writeRequestError(w, r, http.StatusInternalServerError, err.Error(), err)
 			return
 		}
 
@@ -86,28 +89,29 @@ func (h *Handler) handleRecords(w http.ResponseWriter, r *http.Request) {
 	case http.MethodPost:
 		var payload recordPayload
 		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
-			writeError(w, http.StatusBadRequest, fmt.Sprintf("invalid json: %v", err))
+			h.writeRequestError(w, r, http.StatusBadRequest, fmt.Sprintf("invalid json: %v", err), err)
 			return
 		}
 		if strings.TrimSpace(payload.URL) == "" {
-			writeError(w, http.StatusBadRequest, "url is required")
+			h.writeRequestError(w, r, http.StatusBadRequest, "url is required", nil)
 			return
 		}
 		record, err := h.repo.Create(r.Context(), payload)
 		if err != nil {
-			writeError(w, http.StatusBadRequest, err.Error())
+			h.writeRequestError(w, r, http.StatusBadRequest, err.Error(), err)
 			return
 		}
+		log.Printf("history record created id=%d url=%q", record.ID, record.URL)
 		writeJSON(w, http.StatusCreated, record)
 	default:
-		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
+		h.writeRequestError(w, r, http.StatusMethodNotAllowed, "method not allowed", nil)
 	}
 }
 
 func (h *Handler) handleRecordByID(w http.ResponseWriter, r *http.Request) {
 	id, err := parseIDFromPath(r.URL.Path, "/api/history/records/")
 	if err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
+		h.writeRequestError(w, r, http.StatusBadRequest, err.Error(), err)
 		return
 	}
 
@@ -115,47 +119,49 @@ func (h *Handler) handleRecordByID(w http.ResponseWriter, r *http.Request) {
 	case http.MethodGet:
 		record, err := h.repo.GetByID(r.Context(), id)
 		if err != nil {
-			handleRepositoryError(w, err)
+			h.handleRepositoryError(w, r, err, id)
 			return
 		}
 		writeJSON(w, http.StatusOK, record)
 	case http.MethodPut:
 		var payload recordPayload
 		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
-			writeError(w, http.StatusBadRequest, fmt.Sprintf("invalid json: %v", err))
+			h.writeRequestError(w, r, http.StatusBadRequest, fmt.Sprintf("invalid json: %v", err), err)
 			return
 		}
 		if strings.TrimSpace(payload.URL) == "" {
-			writeError(w, http.StatusBadRequest, "url is required")
+			h.writeRequestError(w, r, http.StatusBadRequest, "url is required", nil)
 			return
 		}
 		record, err := h.repo.Update(r.Context(), id, payload)
 		if err != nil {
-			handleRepositoryError(w, err)
+			h.handleRepositoryError(w, r, err, id)
 			return
 		}
+		log.Printf("history record updated id=%d url=%q", record.ID, record.URL)
 		writeJSON(w, http.StatusOK, record)
 	case http.MethodDelete:
 		if err := h.repo.Delete(r.Context(), id); err != nil {
-			handleRepositoryError(w, err)
+			h.handleRepositoryError(w, r, err, id)
 			return
 		}
+		log.Printf("history record deleted id=%d", id)
 		writeJSON(w, http.StatusOK, map[string]any{"deleted": true, "id": id})
 	default:
-		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
+		h.writeRequestError(w, r, http.StatusMethodNotAllowed, "method not allowed", nil)
 	}
 }
 
 func (h *Handler) handleRecent(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
+		h.writeRequestError(w, r, http.StatusMethodNotAllowed, "method not allowed", nil)
 		return
 	}
 
 	limit := parseInt(r.URL.Query().Get("limit"), 20, 1, 100)
 	items, err := h.repo.ListRecent(r.Context(), limit)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+		h.writeRequestError(w, r, http.StatusInternalServerError, err.Error(), err)
 		return
 	}
 
@@ -164,7 +170,7 @@ func (h *Handler) handleRecent(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) handleRootURLs(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
+		h.writeRequestError(w, r, http.StatusMethodNotAllowed, "method not allowed", nil)
 		return
 	}
 
@@ -172,7 +178,7 @@ func (h *Handler) handleRootURLs(w http.ResponseWriter, r *http.Request) {
 	limit := parseInt(r.URL.Query().Get("limit"), 20, 1, 100)
 	items, err := h.repo.ListRootURLStats(r.Context(), days, limit)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+		h.writeRequestError(w, r, http.StatusInternalServerError, err.Error(), err)
 		return
 	}
 
@@ -208,19 +214,47 @@ func parseInt(raw string, fallback, min, max int) int {
 	return value
 }
 
-func handleRepositoryError(w http.ResponseWriter, err error) {
+func (h *Handler) handleRepositoryError(w http.ResponseWriter, r *http.Request, err error, id int64) {
 	switch {
 	case errors.Is(err, errNotFound):
-		writeError(w, http.StatusNotFound, err.Error())
+		h.writeRequestError(w, r, http.StatusNotFound, err.Error(), fmt.Errorf("record id=%d: %w", id, err))
 	default:
-		writeError(w, http.StatusBadRequest, err.Error())
+		h.writeRequestError(w, r, http.StatusBadRequest, err.Error(), fmt.Errorf("record id=%d: %w", id, err))
 	}
+}
+
+func (h *Handler) writeRequestError(w http.ResponseWriter, r *http.Request, status int, message string, err error) {
+	if err != nil {
+		log.Printf("request failed method=%s path=%s rawQuery=%q status=%d remote=%s error=%v", r.Method, r.URL.Path, r.URL.RawQuery, status, r.RemoteAddr, err)
+	} else {
+		log.Printf("request rejected method=%s path=%s rawQuery=%q status=%d remote=%s message=%q", r.Method, r.URL.Path, r.URL.RawQuery, status, r.RemoteAddr, message)
+	}
+	writeError(w, status, message)
 }
 
 func withJSON(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		next.ServeHTTP(w, r)
+	})
+}
+
+type loggingResponseWriter struct {
+	http.ResponseWriter
+	status int
+}
+
+func (w *loggingResponseWriter) WriteHeader(status int) {
+	w.status = status
+	w.ResponseWriter.WriteHeader(status)
+}
+
+func withLogging(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		startedAt := time.Now()
+		wrapped := &loggingResponseWriter{ResponseWriter: w, status: http.StatusOK}
+		next.ServeHTTP(wrapped, r)
+		log.Printf("request completed method=%s path=%s rawQuery=%q status=%d duration=%s remote=%s", r.Method, r.URL.Path, r.URL.RawQuery, wrapped.status, time.Since(startedAt).Round(time.Millisecond), r.RemoteAddr)
 	})
 }
 
