@@ -16,6 +16,7 @@ import (
 
 func main() {
 	cfg := config.Load()
+	log.Printf("starting history backend listen_addr=%s", cfg.ListenAddr)
 	db, err := database.New(cfg.DatabaseURL)
 	if err != nil {
 		log.Fatalf("database setup failed: %v", err)
@@ -29,6 +30,7 @@ func main() {
 	if err := db.Ping(context.Background()); err != nil {
 		log.Fatalf("database ping failed: %v", err)
 	}
+	log.Printf("database connection verified")
 
 	handler := history.NewHandler(db)
 	server := &http.Server{
@@ -48,11 +50,14 @@ func main() {
 	}()
 
 	<-ctx.Done()
+	log.Printf("shutdown signal received")
 
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	if err := server.Shutdown(shutdownCtx); err != nil {
 		log.Printf("shutdown error: %v", err)
+		return
 	}
+	log.Printf("server shutdown completed")
 }
