@@ -9,6 +9,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/jackc/pgx/v5"
+
 	"myanalyzer/backend/internal/database"
 )
 
@@ -99,10 +101,10 @@ func (r *Repository) Create(ctx context.Context, payload recordPayload) (Record,
 		return Record{}, err
 	}
 
-	sql := fmt.Sprintf(`
+	sql := `
 WITH inserted AS (
     INSERT INTO browser_history (url, title, domain, root_url, visited_at, notes, visit_count)
-    VALUES (%s, %s, %s, %s, %s, %s, GREATEST(%d, 1))
+    VALUES ($1, $2, $3, $4, $5, $6, GREATEST($7, 1))
     RETURNING *
 )
 SELECT row_to_json(t)
@@ -123,17 +125,17 @@ FROM (
         to_char(visited_at AT TIME ZONE 'UTC', 'YYYY-MM-DD') AS "displayVisitedDate",
         to_char(visited_at AT TIME ZONE 'UTC', 'HH24:MI:SS') AS "displayVisitedTime"
     FROM inserted
-) t;`,
-		database.Quote(payload.URL),
-		database.Quote(payload.Title),
-		database.Quote(normalizeDomain(payload.URL)),
-		database.Quote(normalizeRootURL(payload.URL)),
-		database.Quote(visitedAt.Format(time.RFC3339)),
-		database.Quote(payload.Notes),
+) t;`
+
+	out, err := r.db.Query(ctx, sql,
+		payload.URL,
+		payload.Title,
+		normalizeDomain(payload.URL),
+		normalizeRootURL(payload.URL),
+		visitedAt,
+		payload.Notes,
 		payload.VisitCount,
 	)
-
-	out, err := r.db.Query(ctx, sql)
 	if err != nil {
 		return Record{}, err
 	}
@@ -150,7 +152,17 @@ func (r *Repository) CreateBatch(ctx context.Context, payload batchPayload) (int
 		return 0, nil
 	}
 
-	statements := make([]string, 0, len(payload.Records))
+	type batchItem struct {
+		url       string
+		title     string
+		domain    string
+		rootURL   string
+		visitedAt time.Time
+		notes     string
+		visitCnt  int
+	}
+
+	items := make([]batchItem, 0, len(payload.Records))
 	inserted := 0
 	for _, item := range payload.Records {
 		if strings.TrimSpace(item.URL) == "" {
@@ -160,39 +172,48 @@ func (r *Repository) CreateBatch(ctx context.Context, payload batchPayload) (int
 		if err != nil {
 			return 0, err
 		}
-		statements = append(statements, fmt.Sprintf(`
+		items = append(items, batchItem{
+			url:       item.URL,
+			title:     item.Title,
+			domain:    normalizeDomain(item.URL),
+			rootURL:   normalizeRootURL(item.URL),
+			visitedAt: visitedAt,
+			notes:     item.Notes,
+			visitCnt:  max(item.VisitCount, 1),
+		})
+		inserted++
+	}
+
+	if len(items) == 0 {
+		return 0, nil
+	}
+
+	const sql = `
 INSERT INTO browser_history (url, title, domain, root_url, visited_at, notes, visit_count)
-VALUES (%s, %s, %s, %s, %s, %s, GREATEST(%d, 1))
+VALUES ($1, $2, $3, $4, $5, $6, GREATEST($7, 1))
 ON CONFLICT (url, visited_at) DO UPDATE
 SET title = EXCLUDED.title,
     domain = EXCLUDED.domain,
     root_url = EXCLUDED.root_url,
     notes = EXCLUDED.notes,
     visit_count = GREATEST(browser_history.visit_count, EXCLUDED.visit_count),
-    updated_at = NOW();`,
-			database.Quote(item.URL),
-			database.Quote(item.Title),
-			database.Quote(normalizeDomain(item.URL)),
-			database.Quote(normalizeRootURL(item.URL)),
-			database.Quote(visitedAt.Format(time.RFC3339)),
-			database.Quote(item.Notes),
-			max(item.VisitCount, 1),
-		))
-		inserted++
-	}
+    updated_at = NOW();`
 
-	if len(statements) == 0 {
-		return 0, nil
-	}
-
-	if err := r.db.Exec(ctx, "BEGIN;\n"+strings.Join(statements, "\n")+"\nCOMMIT;"); err != nil {
+	if err := r.db.WithTx(ctx, func(tx pgx.Tx) error {
+		for _, item := range items {
+			if _, err := tx.Exec(ctx, sql, item.url, item.title, item.domain, item.rootURL, item.visitedAt, item.notes, item.visitCnt); err != nil {
+				return fmt.Errorf("batch insert failed: %w", err)
+			}
+		}
+		return nil
+	}); err != nil {
 		return 0, err
 	}
 	return inserted, nil
 }
 
 func (r *Repository) GetByID(ctx context.Context, id int64) (Record, error) {
-	items, err := r.fetchRecords(ctx, fmt.Sprintf("WHERE id = %d", id), "", "")
+	items, err := r.fetchRecords(ctx, "WHERE id = $1", "", "", id)
 	if err != nil {
 		return Record{}, err
 	}
@@ -208,18 +229,18 @@ func (r *Repository) Update(ctx context.Context, id int64, payload recordPayload
 		return Record{}, err
 	}
 
-	sql := fmt.Sprintf(`
+	sql := `
 WITH updated AS (
     UPDATE browser_history
-    SET url = %s,
-        title = %s,
-        domain = %s,
-        root_url = %s,
-        visited_at = %s,
-        notes = %s,
-        visit_count = GREATEST(%d, 1),
+    SET url = $1,
+        title = $2,
+        domain = $3,
+        root_url = $4,
+        visited_at = $5,
+        notes = $6,
+        visit_count = GREATEST($7, 1),
         updated_at = NOW()
-    WHERE id = %d
+    WHERE id = $8
     RETURNING *
 )
 SELECT COALESCE(row_to_json(t), '{}'::json)
@@ -240,18 +261,18 @@ FROM (
         to_char(visited_at AT TIME ZONE 'UTC', 'YYYY-MM-DD') AS "displayVisitedDate",
         to_char(visited_at AT TIME ZONE 'UTC', 'HH24:MI:SS') AS "displayVisitedTime"
     FROM updated
-) t;`,
-		database.Quote(payload.URL),
-		database.Quote(payload.Title),
-		database.Quote(normalizeDomain(payload.URL)),
-		database.Quote(normalizeRootURL(payload.URL)),
-		database.Quote(visitedAt.Format(time.RFC3339)),
-		database.Quote(payload.Notes),
+) t;`
+
+	out, err := r.db.Query(ctx, sql,
+		payload.URL,
+		payload.Title,
+		normalizeDomain(payload.URL),
+		normalizeRootURL(payload.URL),
+		visitedAt,
+		payload.Notes,
 		payload.VisitCount,
 		id,
 	)
-
-	out, err := r.db.Query(ctx, sql)
 	if err != nil {
 		return Record{}, err
 	}
@@ -267,12 +288,12 @@ FROM (
 }
 
 func (r *Repository) Delete(ctx context.Context, id int64) error {
-	sql := fmt.Sprintf(`SELECT COUNT(*) FROM (DELETE FROM browser_history WHERE id = %d RETURNING 1) t;`, id)
-	out, err := r.db.Query(ctx, sql)
+	const sql = `SELECT COUNT(*) FROM (DELETE FROM browser_history WHERE id = $1 RETURNING 1) t;`
+	count, err := r.db.QueryInt(ctx, sql, id)
 	if err != nil {
 		return err
 	}
-	if strings.TrimSpace(string(out)) == "0" {
+	if count == 0 {
 		return errNotFound
 	}
 	return nil
@@ -280,24 +301,21 @@ func (r *Repository) Delete(ctx context.Context, id int64) error {
 
 func (r *Repository) List(ctx context.Context, limit, offset int, search string) ([]Record, int, error) {
 	whereClause := ""
+	args := make([]any, 0, 5)
 	if trimmed := strings.TrimSpace(search); trimmed != "" {
-		q := database.Quote("%" + trimmed + "%")
-		whereClause = fmt.Sprintf("WHERE url ILIKE %s OR title ILIKE %s OR domain ILIKE %s OR root_url ILIKE %s OR notes ILIKE %s", q, q, q, q, q)
+		q := "%" + trimmed + "%"
+		whereClause = "WHERE url ILIKE $1 OR title ILIKE $2 OR domain ILIKE $3 OR root_url ILIKE $4 OR notes ILIKE $5"
+		args = append(args, q, q, q, q, q)
 	}
 
-	items, err := r.fetchRecords(ctx, whereClause, "ORDER BY visited_at DESC, id DESC", fmt.Sprintf("LIMIT %d OFFSET %d", limit, offset))
+	items, err := r.fetchRecords(ctx, whereClause, "ORDER BY visited_at DESC, id DESC", fmt.Sprintf("LIMIT %d OFFSET %d", limit, offset), args...)
 	if err != nil {
 		return nil, 0, err
 	}
 
 	countSQL := fmt.Sprintf(`SELECT COUNT(*) FROM browser_history %s;`, whereClause)
-	out, err := r.db.Query(ctx, countSQL)
+	total, err := r.db.QueryInt(ctx, countSQL, args...)
 	if err != nil {
-		return nil, 0, err
-	}
-
-	var total int
-	if _, err := fmt.Sscanf(string(out), "%d", &total); err != nil {
 		return nil, 0, err
 	}
 
@@ -305,15 +323,15 @@ func (r *Repository) List(ctx context.Context, limit, offset int, search string)
 }
 
 func (r *Repository) ListRecent(ctx context.Context, limit int) ([]Record, error) {
-	return r.fetchRecords(ctx, fmt.Sprintf("WHERE recent_rank <= %d", limit), "ORDER BY visited_at DESC, id DESC", "")
+	return r.fetchRecords(ctx, "WHERE recent_rank <= $1", "ORDER BY visited_at DESC, id DESC", "", limit)
 }
 
 func (r *Repository) ListRootURLStats(ctx context.Context, days, limit int) ([]RootURLStat, error) {
-	sql := fmt.Sprintf(`
+	sql := `
 WITH recent_history AS (
     SELECT *
     FROM browser_history
-    WHERE visited_at >= NOW() - INTERVAL '%d days'
+    WHERE visited_at >= NOW() - make_interval(days => $1)
       AND root_url <> ''
 ),
 ranked_history AS (
@@ -341,10 +359,10 @@ FROM (
     FROM ranked_history
     GROUP BY root_url
     ORDER BY "visitCountTotal" DESC, "recordCount" DESC, "lastVisitedAt" DESC, "rootURL" ASC
-    LIMIT %d
-) t;`, days, limit)
+    LIMIT $2
+) t;`
 
-	out, err := r.db.Query(ctx, sql)
+	out, err := r.db.Query(ctx, sql, days, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -356,9 +374,9 @@ FROM (
 	return items, nil
 }
 
-func (r *Repository) fetchRecords(ctx context.Context, whereClause, orderBy, limitClause string) ([]Record, error) {
+func (r *Repository) fetchRecords(ctx context.Context, whereClause, orderBy, limitClause string, args ...any) ([]Record, error) {
 	sql := buildRecordSelect(whereClause, orderBy, limitClause)
-	out, err := r.db.Query(ctx, sql)
+	out, err := r.db.Query(ctx, sql, args...)
 	if err != nil {
 		return nil, err
 	}

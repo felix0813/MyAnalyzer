@@ -1,19 +1,32 @@
 package database
 
-import "testing"
+import (
+	"context"
+	"testing"
+)
 
-func TestParseConfig(t *testing.T) {
-	cfg, err := parseConfig("postgres://postgres:secret@db.example.com:5433/myanalyzer?sslmode=disable")
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if cfg.host != "db.example.com" || cfg.port != "5433" || cfg.user != "postgres" || cfg.password != "secret" || cfg.database != "myanalyzer" {
-		t.Fatalf("unexpected config: %+v", cfg)
+func TestNewRejectsEmptyDatabaseURL(t *testing.T) {
+	if _, err := New(""); err == nil {
+		t.Fatal("expected empty database URL error")
 	}
 }
 
-func TestParseConfigRejectsUnsupportedSSLMode(t *testing.T) {
-	if _, err := parseConfig("postgres://postgres:secret@127.0.0.1:5432/myanalyzer?sslmode=require"); err == nil {
-		t.Fatal("expected sslmode error")
+func TestClientCloseNilSafe(t *testing.T) {
+	var client *Client
+	if err := client.Close(); err != nil {
+		t.Fatalf("unexpected close error: %v", err)
+	}
+}
+
+func TestReadSQLFileMissing(t *testing.T) {
+	if _, err := ReadSQLFile("missing.sql"); err == nil {
+		t.Fatal("expected read error")
+	}
+}
+
+func TestPingNilPoolPanicsGuardedByConstructor(t *testing.T) {
+	client := &Client{}
+	if err := client.Ping(context.Background()); err == nil {
+		t.Fatal("expected ping error with nil pool")
 	}
 }
