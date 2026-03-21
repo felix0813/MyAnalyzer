@@ -20,6 +20,17 @@ type Repository struct {
 	db *database.Client
 }
 
+const batchUpsertHistorySQL = `
+INSERT INTO browser_history (url, title, domain, root_url, visited_at, notes, visit_count)
+VALUES ($1, $2, $3, $4, $5, $6, GREATEST($7, 1))
+ON CONFLICT (url_hash, visited_at) DO UPDATE
+SET title = EXCLUDED.title,
+    domain = EXCLUDED.domain,
+    root_url = EXCLUDED.root_url,
+    notes = EXCLUDED.notes,
+    visit_count = GREATEST(browser_history.visit_count, EXCLUDED.visit_count),
+    updated_at = NOW();`
+
 func NewRepository(db *database.Client) *Repository {
 	return &Repository{db: db}
 }
@@ -188,20 +199,9 @@ func (r *Repository) CreateBatch(ctx context.Context, payload batchPayload) (int
 		return 0, nil
 	}
 
-	const sql = `
-INSERT INTO browser_history (url, title, domain, root_url, visited_at, notes, visit_count)
-VALUES ($1, $2, $3, $4, $5, $6, GREATEST($7, 1))
-ON CONFLICT (url, visited_at) DO UPDATE
-SET title = EXCLUDED.title,
-    domain = EXCLUDED.domain,
-    root_url = EXCLUDED.root_url,
-    notes = EXCLUDED.notes,
-    visit_count = GREATEST(browser_history.visit_count, EXCLUDED.visit_count),
-    updated_at = NOW();`
-
 	if err := r.db.WithTx(ctx, func(tx pgx.Tx) error {
 		for _, item := range items {
-			if _, err := tx.Exec(ctx, sql, item.url, item.title, item.domain, item.rootURL, item.visitedAt, item.notes, item.visitCnt); err != nil {
+			if _, err := tx.Exec(ctx, batchUpsertHistorySQL, item.url, item.title, item.domain, item.rootURL, item.visitedAt, item.notes, item.visitCnt); err != nil {
 				return fmt.Errorf("batch insert failed: %w", err)
 			}
 		}
