@@ -22,12 +22,12 @@ func NewHandler(db *database.Client) *Handler {
 
 func (h *Handler) Routes() http.Handler {
 	mux := http.NewServeMux()
-	mux.HandleFunc("/healthz", h.handleHealth)
-	mux.HandleFunc("/api/history/recent", h.handleRecent)
-	mux.HandleFunc("/api/history/root-urls", h.handleRootURLs)
-	mux.HandleFunc("/api/history/records/", h.handleRecordByID)
-	mux.HandleFunc("/api/history/records", h.handleRecords)
-	mux.HandleFunc("/api/history", h.handleBatchImport)
+	mux.HandleFunc("/myAnalyzer/healthz", h.handleHealth)
+	mux.HandleFunc("/myAnalyzer/api/history/recent", h.handleRecent)
+	mux.HandleFunc("/myAnalyzer/api/history/root-urls", h.handleRootURLs)
+	mux.HandleFunc("/myAnalyzer/api/history/records/", h.handleRecordByID)
+	mux.HandleFunc("/myAnalyzer/api/history/records", h.handleRecords)
+	mux.HandleFunc("/myAnalyzer/api/history", h.handleBatchImport)
 	return withJSON(mux)
 }
 
