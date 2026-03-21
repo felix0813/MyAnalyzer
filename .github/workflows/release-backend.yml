@@ -52,12 +52,14 @@ jobs:
 
       - name: Upload assets to release
         if: github.event_name == 'release'
-        uses: softprops/action-gh-release@v2
-        with:
-          files: |
-            dist/${{ env.PACKAGE_NAME }}.tar.gz
-            dist/${{ env.PACKAGE_NAME }}.tar.gz.sha256
-          fail_on_unmatched_files: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          gh release upload "$RELEASE_TAG" \
+            "dist/${PACKAGE_NAME}.tar.gz" \
+            "dist/${PACKAGE_NAME}.tar.gz.sha256" \
+            --clobber
 
       - name: Upload workflow artifact
         if: github.event_name == 'workflow_dispatch'

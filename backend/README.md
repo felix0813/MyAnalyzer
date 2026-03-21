@@ -52,6 +52,7 @@ go run ./cmd/server
 - 上传内容：
   - `myanalyzer-backend-linux-amd64.tar.gz`
   - `myanalyzer-backend-linux-amd64.tar.gz.sha256`
+- Release 上传方式：在 `release.published` 事件里直接执行 `gh release upload <tag> --clobber`，将产物上传到当前 Release，避免第三方 Action 在已有 Release 上重复创建/更新时的兼容性问题。
 
 也支持手动触发 `workflow_dispatch`，手动触发时会将相同产物上传为 GitHub Actions Artifact，便于预先验证打包流程。
 
