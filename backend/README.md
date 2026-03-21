@@ -6,6 +6,7 @@
 - Edge 扩展批量上报浏览记录
 - 基于数据库 `VIEW` 查询最近历史
 - 返回适合客户端直接展示的字段，如 `displayTitle`、`displayVisitedDate`、`displayVisitedTime`
+- 按最近几天历史记录的根 URL（去掉路径、查询参数、片段）进行聚合分析
 
 ## 技术栈
 - Go 1.22
@@ -84,11 +85,16 @@ go run ./cmd/server
 ### 查询最近历史（来自 VIEW）
 - `GET /api/history/recent?limit=20`
 
+### 查询最近几天的根 URL 聚合
+- `GET /api/history/root-urls?days=3&limit=20`
+- `days` 默认 3，范围 1~30；`limit` 默认 20，范围 1~100
+- 返回字段包括：`rootURL`、`recordCount`、`visitCountTotal`、`lastVisitedAt`、`latestTitle`、`latestURL`
+
 ## 数据库设计
 
 `init.sql` 包含：
-- `browser_history` 主表
-- 按访问时间、域名的索引
+- `browser_history` 主表（包含 `root_url` 聚合字段）
+- 按访问时间、域名、根 URL 的索引
 - 基于 `pg_trgm` 的搜索索引
 - `v_browser_history_client` 视图：提供客户端直接可用的展示字段
 - `v_browser_history_recent` 视图：提供最近 100 条历史记录的快速读取

@@ -7,6 +7,7 @@ type Record struct {
 	URL                string    `json:"url"`
 	Title              string    `json:"title"`
 	Domain             string    `json:"domain"`
+	RootURL            string    `json:"rootURL"`
 	VisitedAt          time.Time `json:"visitedAt"`
 	Notes              string    `json:"notes,omitempty"`
 	VisitCount         int       `json:"visitCount"`
@@ -40,4 +41,21 @@ type listResponse struct {
 	Offset     int      `json:"offset"`
 	Search     string   `json:"search"`
 	RecentOnly bool     `json:"recentOnly"`
+}
+
+type RootURLStat struct {
+	RootURL              string    `json:"rootURL"`
+	Domain               string    `json:"domain"`
+	RecordCount          int       `json:"recordCount"`
+	VisitCountTotal      int       `json:"visitCountTotal"`
+	LastVisitedAt        time.Time `json:"lastVisitedAt"`
+	DisplayLastVisitedAt string    `json:"displayLastVisitedAt"`
+	LatestTitle          string    `json:"latestTitle"`
+	LatestURL            string    `json:"latestURL"`
+}
+
+type rootURLStatsResponse struct {
+	Items []RootURLStat `json:"items"`
+	Days  int           `json:"days"`
+	Limit int           `json:"limit"`
 }

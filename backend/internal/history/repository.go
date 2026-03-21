@@ -33,12 +33,38 @@ func parseVisitedAt(value string) (time.Time, error) {
 	return ts.UTC(), nil
 }
 
+func parseURL(rawURL string) (*url.URL, error) {
+	trimmed := strings.TrimSpace(rawURL)
+	if trimmed == "" {
+		return nil, errors.New("empty url")
+	}
+	parsed, err := url.Parse(trimmed)
+	if err != nil {
+		return nil, err
+	}
+	if parsed.Host == "" {
+		return nil, errors.New("missing host")
+	}
+	return parsed, nil
+}
+
 func normalizeDomain(rawURL string) string {
-	parsed, err := url.Parse(rawURL)
+	parsed, err := parseURL(rawURL)
 	if err != nil {
 		return ""
 	}
 	return strings.ToLower(parsed.Hostname())
+}
+
+func normalizeRootURL(rawURL string) string {
+	parsed, err := parseURL(rawURL)
+	if err != nil {
+		return ""
+	}
+	if parsed.Scheme == "" {
+		return strings.ToLower(parsed.Host)
+	}
+	return fmt.Sprintf("%s://%s", strings.ToLower(parsed.Scheme), strings.ToLower(parsed.Host))
 }
 
 func buildRecordSelect(whereClause string, orderBy string, limitClause string) string {
@@ -50,6 +76,7 @@ FROM (
         url,
         title,
         domain,
+        root_url AS "rootURL",
         visited_at AS "visitedAt",
         notes,
         visit_count AS "visitCount",
@@ -74,8 +101,8 @@ func (r *Repository) Create(ctx context.Context, payload recordPayload) (Record,
 
 	sql := fmt.Sprintf(`
 WITH inserted AS (
-    INSERT INTO browser_history (url, title, domain, visited_at, notes, visit_count)
-    VALUES (%s, %s, %s, %s, %s, GREATEST(%d, 1))
+    INSERT INTO browser_history (url, title, domain, root_url, visited_at, notes, visit_count)
+    VALUES (%s, %s, %s, %s, %s, %s, GREATEST(%d, 1))
     RETURNING *
 )
 SELECT row_to_json(t)
@@ -85,6 +112,7 @@ FROM (
         url,
         title,
         domain,
+        root_url AS "rootURL",
         visited_at AS "visitedAt",
         notes,
         visit_count AS "visitCount",
@@ -99,6 +127,7 @@ FROM (
 		database.Quote(payload.URL),
 		database.Quote(payload.Title),
 		database.Quote(normalizeDomain(payload.URL)),
+		database.Quote(normalizeRootURL(payload.URL)),
 		database.Quote(visitedAt.Format(time.RFC3339)),
 		database.Quote(payload.Notes),
 		payload.VisitCount,
@@ -132,17 +161,19 @@ func (r *Repository) CreateBatch(ctx context.Context, payload batchPayload) (int
 			return 0, err
 		}
 		statements = append(statements, fmt.Sprintf(`
-INSERT INTO browser_history (url, title, domain, visited_at, notes, visit_count)
-VALUES (%s, %s, %s, %s, %s, GREATEST(%d, 1))
+INSERT INTO browser_history (url, title, domain, root_url, visited_at, notes, visit_count)
+VALUES (%s, %s, %s, %s, %s, %s, GREATEST(%d, 1))
 ON CONFLICT (url, visited_at) DO UPDATE
 SET title = EXCLUDED.title,
     domain = EXCLUDED.domain,
+    root_url = EXCLUDED.root_url,
     notes = EXCLUDED.notes,
     visit_count = GREATEST(browser_history.visit_count, EXCLUDED.visit_count),
     updated_at = NOW();`,
 			database.Quote(item.URL),
 			database.Quote(item.Title),
 			database.Quote(normalizeDomain(item.URL)),
+			database.Quote(normalizeRootURL(item.URL)),
 			database.Quote(visitedAt.Format(time.RFC3339)),
 			database.Quote(item.Notes),
 			max(item.VisitCount, 1),
@@ -183,6 +214,7 @@ WITH updated AS (
     SET url = %s,
         title = %s,
         domain = %s,
+        root_url = %s,
         visited_at = %s,
         notes = %s,
         visit_count = GREATEST(%d, 1),
@@ -197,6 +229,7 @@ FROM (
         url,
         title,
         domain,
+        root_url AS "rootURL",
         visited_at AS "visitedAt",
         notes,
         visit_count AS "visitCount",
@@ -211,6 +244,7 @@ FROM (
 		database.Quote(payload.URL),
 		database.Quote(payload.Title),
 		database.Quote(normalizeDomain(payload.URL)),
+		database.Quote(normalizeRootURL(payload.URL)),
 		database.Quote(visitedAt.Format(time.RFC3339)),
 		database.Quote(payload.Notes),
 		payload.VisitCount,
@@ -248,7 +282,7 @@ func (r *Repository) List(ctx context.Context, limit, offset int, search string)
 	whereClause := ""
 	if trimmed := strings.TrimSpace(search); trimmed != "" {
 		q := database.Quote("%" + trimmed + "%")
-		whereClause = fmt.Sprintf("WHERE url ILIKE %s OR title ILIKE %s OR domain ILIKE %s OR notes ILIKE %s", q, q, q, q)
+		whereClause = fmt.Sprintf("WHERE url ILIKE %s OR title ILIKE %s OR domain ILIKE %s OR root_url ILIKE %s OR notes ILIKE %s", q, q, q, q, q)
 	}
 
 	items, err := r.fetchRecords(ctx, whereClause, "ORDER BY visited_at DESC, id DESC", fmt.Sprintf("LIMIT %d OFFSET %d", limit, offset))
@@ -256,7 +290,7 @@ func (r *Repository) List(ctx context.Context, limit, offset int, search string)
 		return nil, 0, err
 	}
 
-	countSQL := fmt.Sprintf(`SELECT COUNT(*) FROM browser_history %s;`, strings.Replace(whereClause, "title", "title", 1))
+	countSQL := fmt.Sprintf(`SELECT COUNT(*) FROM browser_history %s;`, whereClause)
 	out, err := r.db.Query(ctx, countSQL)
 	if err != nil {
 		return nil, 0, err
@@ -272,6 +306,54 @@ func (r *Repository) List(ctx context.Context, limit, offset int, search string)
 
 func (r *Repository) ListRecent(ctx context.Context, limit int) ([]Record, error) {
 	return r.fetchRecords(ctx, fmt.Sprintf("WHERE recent_rank <= %d", limit), "ORDER BY visited_at DESC, id DESC", "")
+}
+
+func (r *Repository) ListRootURLStats(ctx context.Context, days, limit int) ([]RootURLStat, error) {
+	sql := fmt.Sprintf(`
+WITH recent_history AS (
+    SELECT *
+    FROM browser_history
+    WHERE visited_at >= NOW() - INTERVAL '%d days'
+      AND root_url <> ''
+),
+ranked_history AS (
+    SELECT
+        root_url,
+        url,
+        title,
+        domain,
+        visited_at,
+        visit_count,
+        ROW_NUMBER() OVER (PARTITION BY root_url ORDER BY visited_at DESC, id DESC) AS row_num
+    FROM recent_history
+)
+SELECT COALESCE(json_agg(row_to_json(t)), '[]'::json)
+FROM (
+    SELECT
+        root_url AS "rootURL",
+        COUNT(*) AS "recordCount",
+        COALESCE(SUM(visit_count), 0) AS "visitCountTotal",
+        MAX(visited_at) AS "lastVisitedAt",
+        MAX(domain) FILTER (WHERE row_num = 1) AS domain,
+        MAX(title) FILTER (WHERE row_num = 1) AS "latestTitle",
+        MAX(url) FILTER (WHERE row_num = 1) AS "latestURL",
+        to_char(MAX(visited_at) AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS "displayLastVisitedAt"
+    FROM ranked_history
+    GROUP BY root_url
+    ORDER BY "visitCountTotal" DESC, "recordCount" DESC, "lastVisitedAt" DESC, "rootURL" ASC
+    LIMIT %d
+) t;`, days, limit)
+
+	out, err := r.db.Query(ctx, sql)
+	if err != nil {
+		return nil, err
+	}
+
+	var items []RootURLStat
+	if err := json.Unmarshal(out, &items); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 func (r *Repository) fetchRecords(ctx context.Context, whereClause, orderBy, limitClause string) ([]Record, error) {

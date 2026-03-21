@@ -29,3 +29,23 @@ func TestParseInt(t *testing.T) {
 		t.Fatalf("expected fallback 20, got %d", got)
 	}
 }
+
+func TestNormalizeRootURL(t *testing.T) {
+	tests := []struct {
+		name string
+		raw  string
+		want string
+	}{
+		{name: "path and query trimmed", raw: "https://Example.com/news/world?id=1", want: "https://example.com"},
+		{name: "port preserved", raw: "http://Example.com:8080/path/to/page?debug=1", want: "http://example.com:8080"},
+		{name: "invalid url returns empty", raw: "not a url", want: ""},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := normalizeRootURL(tt.raw); got != tt.want {
+				t.Fatalf("expected %q, got %q", tt.want, got)
+			}
+		})
+	}
+}

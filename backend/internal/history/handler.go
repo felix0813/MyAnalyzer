@@ -24,6 +24,7 @@ func (h *Handler) Routes() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", h.handleHealth)
 	mux.HandleFunc("/api/history/recent", h.handleRecent)
+	mux.HandleFunc("/api/history/root-urls", h.handleRootURLs)
 	mux.HandleFunc("/api/history/records/", h.handleRecordByID)
 	mux.HandleFunc("/api/history/records", h.handleRecords)
 	mux.HandleFunc("/api/history", h.handleBatchImport)
@@ -159,6 +160,23 @@ func (h *Handler) handleRecent(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, listResponse{Items: items, Total: len(items), Limit: limit, Offset: 0, Search: "", RecentOnly: true})
+}
+
+func (h *Handler) handleRootURLs(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+
+	days := parseInt(r.URL.Query().Get("days"), 3, 1, 30)
+	limit := parseInt(r.URL.Query().Get("limit"), 20, 1, 100)
+	items, err := h.repo.ListRootURLStats(r.Context(), days, limit)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	writeJSON(w, http.StatusOK, rootURLStatsResponse{Items: items, Days: days, Limit: limit})
 }
 
 func parseIDFromPath(path, prefix string) (int64, error) {
