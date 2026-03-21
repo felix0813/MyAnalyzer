@@ -369,10 +369,3 @@ func (r *Repository) fetchRecords(ctx context.Context, whereClause, orderBy, lim
 	}
 	return items, nil
 }
-
-func max(a, b int) int {
-	if a > b {
-		return a
-	}
-	return b
-}

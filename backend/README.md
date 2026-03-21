@@ -9,6 +9,7 @@
 - 按最近几天历史记录的根 URL（去掉路径、查询参数、片段）进行聚合分析
 
 ## 技术栈
+
 - Go 1.22
 - PostgreSQL
 - 标准库 `net/http`
@@ -17,12 +18,14 @@
 ## 启动方式
 
 ### 1. 初始化数据库
+
 ```bash
 cd backend
 go run ./cmd/initdb -file init.sql
 ```
 
 ### 2. 启动服务
+
 ```bash
 cd backend
 go run ./cmd/server
@@ -31,15 +34,18 @@ go run ./cmd/server
 > 所有数据库查询均通过纯 Go 实现的 PostgreSQL 协议驱动执行，无需依赖 `libpq` 或 `psql` 命令行。
 
 默认配置：
+
 - `LISTEN_ADDR=:8000`
 - `DATABASE_URL=postgres://postgres:postgres@127.0.0.1:5432/myanalyzer?sslmode=disable`
 
 ## API 说明
 
 ### 健康检查
+
 - `GET /healthz`
 
 ### 批量导入扩展记录
+
 - `POST /api/history`
 - 兼容当前扩展发送的 JSON 格式：
 
@@ -59,6 +65,7 @@ go run ./cmd/server
 ```
 
 ### 新增单条记录
+
 - `POST /api/history/records`
 
 ```json
@@ -72,21 +79,27 @@ go run ./cmd/server
 ```
 
 ### 查询记录列表
+
 - `GET /api/history/records?limit=20&offset=0&search=example`
 
 ### 查询单条记录
+
 - `GET /api/history/records/{id}`
 
 ### 更新记录
+
 - `PUT /api/history/records/{id}`
 
 ### 删除记录
+
 - `DELETE /api/history/records/{id}`
 
 ### 查询最近历史（来自 VIEW）
+
 - `GET /api/history/recent?limit=20`
 
 ### 查询最近几天的根 URL 聚合
+
 - `GET /api/history/root-urls?days=3&limit=20`
 - `days` 默认 3，范围 1~30；`limit` 默认 20，范围 1~100
 - 返回字段包括：`rootURL`、`recordCount`、`visitCountTotal`、`lastVisitedAt`、`latestTitle`、`latestURL`
@@ -94,6 +107,7 @@ go run ./cmd/server
 ## 数据库设计
 
 `init.sql` 包含：
+
 - `browser_history` 主表（包含 `root_url` 聚合字段）
 - 按访问时间、域名、根 URL 的索引
 - 基于 `pg_trgm` 的搜索索引
