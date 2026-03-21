@@ -5,6 +5,7 @@ CREATE TABLE IF NOT EXISTS browser_history (
     url TEXT NOT NULL,
     title TEXT NOT NULL DEFAULT '',
     domain TEXT NOT NULL DEFAULT '',
+    root_url TEXT NOT NULL DEFAULT '',
     visited_at TIMESTAMPTZ NOT NULL,
     notes TEXT NOT NULL DEFAULT '',
     visit_count INTEGER NOT NULL DEFAULT 1,
@@ -14,14 +15,24 @@ CREATE TABLE IF NOT EXISTS browser_history (
     CONSTRAINT browser_history_url_visited_unique UNIQUE (url, visited_at)
 );
 
+ALTER TABLE browser_history
+    ADD COLUMN IF NOT EXISTS root_url TEXT NOT NULL DEFAULT '';
+
+UPDATE browser_history
+SET root_url = regexp_replace(url, '([/?#].*)$', '')
+WHERE root_url = '';
+
 CREATE INDEX IF NOT EXISTS idx_browser_history_visited_at_desc
     ON browser_history (visited_at DESC);
 
 CREATE INDEX IF NOT EXISTS idx_browser_history_domain_visited_at_desc
     ON browser_history (domain, visited_at DESC);
 
+CREATE INDEX IF NOT EXISTS idx_browser_history_root_url_visited_at_desc
+    ON browser_history (root_url, visited_at DESC);
+
 CREATE INDEX IF NOT EXISTS idx_browser_history_search_trgm
-    ON browser_history USING GIN ((COALESCE(title, '') || ' ' || COALESCE(url, '') || ' ' || COALESCE(notes, '')) gin_trgm_ops);
+    ON browser_history USING GIN ((COALESCE(title, '') || ' ' || COALESCE(url, '') || ' ' || COALESCE(root_url, '') || ' ' || COALESCE(notes, '')) gin_trgm_ops);
 
 CREATE OR REPLACE VIEW v_browser_history_client AS
 SELECT
@@ -29,6 +40,7 @@ SELECT
     url,
     title,
     domain,
+    root_url,
     visited_at,
     notes,
     visit_count,
@@ -47,6 +59,7 @@ SELECT
     url,
     title,
     domain,
+    root_url,
     visited_at,
     notes,
     visit_count,
