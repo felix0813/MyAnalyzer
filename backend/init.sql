@@ -1,9 +1,11 @@
 CREATE EXTENSION IF NOT EXISTS pg_trgm;
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
 CREATE TABLE IF NOT EXISTS browser_history
 (
     id          BIGSERIAL PRIMARY KEY,
     url         TEXT        NOT NULL,
+    url_hash    TEXT        GENERATED ALWAYS AS (encode(digest(url, 'sha256'), 'hex')) STORED,
     title       TEXT        NOT NULL DEFAULT '',
     domain      TEXT        NOT NULL DEFAULT '',
     root_url    TEXT        NOT NULL DEFAULT '',
@@ -12,12 +14,20 @@ CREATE TABLE IF NOT EXISTS browser_history
     visit_count INTEGER     NOT NULL DEFAULT 1,
     created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    CONSTRAINT browser_history_visit_count_positive CHECK (visit_count > 0),
-    CONSTRAINT browser_history_url_visited_unique UNIQUE (url, visited_at)
+    CONSTRAINT browser_history_visit_count_positive CHECK (visit_count > 0)
 );
 
 ALTER TABLE browser_history
     ADD COLUMN IF NOT EXISTS root_url TEXT NOT NULL DEFAULT '';
+
+ALTER TABLE browser_history
+    ADD COLUMN IF NOT EXISTS url_hash TEXT GENERATED ALWAYS AS (encode(digest(url, 'sha256'), 'hex')) STORED;
+
+ALTER TABLE browser_history
+    DROP CONSTRAINT IF EXISTS browser_history_url_visited_unique;
+
+CREATE UNIQUE INDEX IF NOT EXISTS browser_history_url_visited_unique
+    ON browser_history (url_hash, visited_at);
 
 UPDATE browser_history
 SET root_url = regexp_replace(url, '([/?#].*)$', '')
