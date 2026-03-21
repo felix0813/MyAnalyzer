@@ -17,3 +17,14 @@ func TestParseConfigRejectsUnsupportedSSLMode(t *testing.T) {
 		t.Fatal("expected sslmode error")
 	}
 }
+
+func TestExpandQuery(t *testing.T) {
+	got, err := expandQuery("SELECT $1, $2, $3, $4, $5", "O'Reilly", 42, true, []byte(`{"a":1}`), nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := "SELECT 'O''Reilly', 42, TRUE, '{\"a\":1}', NULL"
+	if got != want {
+		t.Fatalf("unexpected expanded query: %s", got)
+	}
+}

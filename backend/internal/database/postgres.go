@@ -64,7 +64,7 @@ func (c *Client) Close() error {
 	return nil
 }
 
-func (c *Client) Query(ctx context.Context, sql string) ([]byte, error) {
+func (c *Client) Query(ctx context.Context, sql string, args ...any) ([]byte, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -75,7 +75,12 @@ func (c *Client) Query(ctx context.Context, sql string) ([]byte, error) {
 	}
 	defer conn.close()
 
-	result, err := conn.query(ctx, sql)
+	expandedSQL, err := expandQuery(sql, args...)
+	if err != nil {
+		return nil, err
+	}
+
+	result, err := conn.query(ctx, expandedSQL)
 	if err != nil {
 		return nil, err
 	}
@@ -85,7 +90,7 @@ func (c *Client) Query(ctx context.Context, sql string) ([]byte, error) {
 	return result.value, nil
 }
 
-func (c *Client) Exec(ctx context.Context, sql string) error {
+func (c *Client) Exec(ctx context.Context, sql string, args ...any) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -96,7 +101,12 @@ func (c *Client) Exec(ctx context.Context, sql string) error {
 	}
 	defer conn.close()
 
-	return conn.exec(ctx, sql)
+	expandedSQL, err := expandQuery(sql, args...)
+	if err != nil {
+		return err
+	}
+
+	return conn.exec(ctx, expandedSQL)
 }
 
 func (c *Client) Ping(ctx context.Context) error {
@@ -107,6 +117,71 @@ func (c *Client) Ping(ctx context.Context) error {
 
 func Quote(value string) string {
 	return "'" + strings.ReplaceAll(value, "'", "''") + "'"
+}
+
+func expandQuery(sql string, args ...any) (string, error) {
+	if len(args) == 0 {
+		return sql, nil
+	}
+
+	var builder strings.Builder
+	for i := 0; i < len(sql); i++ {
+		if sql[i] != '$' {
+			builder.WriteByte(sql[i])
+			continue
+		}
+
+		j := i + 1
+		for j < len(sql) && sql[j] >= '0' && sql[j] <= '9' {
+			j++
+		}
+		if j == i+1 {
+			builder.WriteByte(sql[i])
+			continue
+		}
+
+		idx, err := strconv.Atoi(sql[i+1 : j])
+		if err != nil || idx < 1 || idx > len(args) {
+			return "", fmt.Errorf("invalid SQL parameter reference %s", sql[i:j])
+		}
+
+		formatted, err := formatArg(args[idx-1])
+		if err != nil {
+			return "", fmt.Errorf("format SQL parameter %d: %w", idx, err)
+		}
+		builder.WriteString(formatted)
+		i = j - 1
+	}
+
+	return builder.String(), nil
+}
+
+func formatArg(value any) (string, error) {
+	switch v := value.(type) {
+	case nil:
+		return "NULL", nil
+	case string:
+		return Quote(v), nil
+	case []byte:
+		return Quote(string(v)), nil
+	case time.Time:
+		return Quote(v.UTC().Format(time.RFC3339Nano)), nil
+	case bool:
+		if v {
+			return "TRUE", nil
+		}
+		return "FALSE", nil
+	case int:
+		return strconv.Itoa(v), nil
+	case int8, int16, int32, int64:
+		return fmt.Sprintf("%d", v), nil
+	case uint, uint8, uint16, uint32, uint64:
+		return fmt.Sprintf("%d", v), nil
+	case float32, float64:
+		return fmt.Sprintf("%v", v), nil
+	default:
+		return "", fmt.Errorf("unsupported parameter type %T", value)
+	}
 }
 
 func ReadSQLFile(path string) (string, error) {
