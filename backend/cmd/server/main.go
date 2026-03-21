@@ -15,7 +15,15 @@ import (
 
 func main() {
 	cfg := config.Load()
-	db := database.New(cfg.DatabaseURL)
+	db, err := database.New(cfg.DatabaseURL)
+	if err != nil {
+		log.Fatalf("database setup failed: %v", err)
+	}
+	defer func() {
+		if err := db.Close(); err != nil {
+			log.Printf("database close error: %v", err)
+		}
+	}()
 
 	if err := db.Ping(context.Background()); err != nil {
 		log.Fatalf("database ping failed: %v", err)

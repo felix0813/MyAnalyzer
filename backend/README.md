@@ -12,13 +12,14 @@
 - Go 1.22
 - PostgreSQL
 - 标准库 `net/http`
-- 通过 `psql` 命令行连接 PostgreSQL（无第三方 Go 依赖）
+- 通过 PostgreSQL `libpq` 驱动连接数据库
 
 ## 启动方式
 
 ### 1. 初始化数据库
 ```bash
-psql "$DATABASE_URL" -f backend/init.sql
+cd backend
+go run ./cmd/initdb -file init.sql
 ```
 
 ### 2. 启动服务
@@ -27,7 +28,7 @@ cd backend
 go run ./cmd/server
 ```
 
-> 运行服务前请确认环境中已安装 `psql`。
+> 所有数据库查询均通过 Go 内的 PostgreSQL `libpq` 驱动执行，无需依赖 `psql` 命令行。
 
 默认配置：
 - `LISTEN_ADDR=:8000`
