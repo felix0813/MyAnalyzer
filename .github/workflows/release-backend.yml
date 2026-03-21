@@ -1,0 +1,70 @@
+name: Release Backend
+
+on:
+  release:
+    types:
+      - published
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-upload:
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: backend
+
+    env:
+      BINARY_NAME: myanalyzer-backend
+      ARTIFACT_DIR: ../dist
+      PACKAGE_NAME: myanalyzer-backend-linux-amd64
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: backend/go.mod
+
+      - name: Run tests
+        run: go test ./...
+
+      - name: Build Linux binary
+        run: |
+          mkdir -p "$ARTIFACT_DIR/$PACKAGE_NAME"
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
+            go build -trimpath -ldflags='-s -w' \
+            -o "$ARTIFACT_DIR/$PACKAGE_NAME/$BINARY_NAME" \
+            ./cmd/server
+          cp README.md "$ARTIFACT_DIR/$PACKAGE_NAME/README.md"
+          cp init.sql "$ARTIFACT_DIR/$PACKAGE_NAME/init.sql"
+
+      - name: Create release archives
+        working-directory: .
+        run: |
+          tar -C dist -czf "dist/${PACKAGE_NAME}.tar.gz" "$PACKAGE_NAME"
+          sha256sum "dist/${PACKAGE_NAME}.tar.gz" > "dist/${PACKAGE_NAME}.tar.gz.sha256"
+
+      - name: Upload assets to release
+        if: github.event_name == 'release'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/${{ env.PACKAGE_NAME }}.tar.gz
+            dist/${{ env.PACKAGE_NAME }}.tar.gz.sha256
+          fail_on_unmatched_files: true
+
+      - name: Upload workflow artifact
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.PACKAGE_NAME }}
+          path: |
+            dist/${{ env.PACKAGE_NAME }}.tar.gz
+            dist/${{ env.PACKAGE_NAME }}.tar.gz.sha256
+          if-no-files-found: error

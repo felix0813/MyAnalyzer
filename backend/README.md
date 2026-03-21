@@ -38,6 +38,23 @@ go run ./cmd/server
 - `LISTEN_ADDR=:8000`
 - `DATABASE_URL=postgres://postgres:postgres@127.0.0.1:5432/myanalyzer?sslmode=disable`
 
+
+## GitHub Release 打包
+
+仓库包含 GitHub Actions 工作流 `.github/workflows/release-backend.yml`，用于自动打包后端服务：
+
+- 触发方式：发布 GitHub Release（`release.published`）
+- 构建目标：`linux/amd64` Ubuntu 可执行文件
+- 产物内容：
+  - `myanalyzer-backend` 可执行文件
+  - `README.md`
+  - `init.sql`
+- 上传内容：
+  - `myanalyzer-backend-linux-amd64.tar.gz`
+  - `myanalyzer-backend-linux-amd64.tar.gz.sha256`
+
+也支持手动触发 `workflow_dispatch`，手动触发时会将相同产物上传为 GitHub Actions Artifact，便于预先验证打包流程。
+
 ## API 说明
 
 ### 健康检查
