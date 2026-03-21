@@ -12,7 +12,7 @@
 - Go 1.22
 - PostgreSQL
 - 标准库 `net/http`
-- 通过 PostgreSQL `libpq` 驱动连接数据库
+- 通过纯 Go 实现的 PostgreSQL 协议驱动连接数据库
 
 ## 启动方式
 
@@ -28,7 +28,7 @@ cd backend
 go run ./cmd/server
 ```
 
-> 所有数据库查询均通过 Go 内的 PostgreSQL `libpq` 驱动执行，无需依赖 `psql` 命令行。
+> 所有数据库查询均通过纯 Go 实现的 PostgreSQL 协议驱动执行，无需依赖 `libpq` 或 `psql` 命令行。
 
 默认配置：
 - `LISTEN_ADDR=:8000`
