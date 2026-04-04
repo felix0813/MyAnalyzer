@@ -1,0 +1,155 @@
+# Build results
+[Dd]ebug/
+[Dd]ebugPublic/
+[Rr]elease/
+[Rr]eleases/
+x64/
+x86/
+build/
+bld/
+[Bb]in/
+[Oo]bj/
+
+# Visual Studio files
+*.opensdf
+*.sdf
+*.user
+*.userosscache
+*.suo
+*.cache
+*.ilk
+*.meta
+*.obj
+*.iobj
+*.ipdb
+*.pdb
+*.i
+*.pyc
+*.pyo
+*.rsp
+*.tlog
+*.vshost.*
+*.Set.xsc
+*.Set.xsd
+*.lay.xsc
+*.lay.xsd
+*.bkp
+
+# Visual Studio 2015+ cache/options
+.vs/
+*.VC.db
+*.VC.VC.opendb
+
+# MSTest test Results
+[Tt]est[Rr]esult*/
+[Bb]uild[Ll]og.*
+
+# NUnit
+*.VisualState.xml
+TestResult.xml
+nunit-*.xml
+
+# Build Results of an ATL Project
+[Dd]ebugPS/
+[Rr]eleasePS/
+dlldata.c
+
+# Benchmark Results
+BenchmarkDotNet.Artifacts/
+
+# .NET Core
+project.lock.json
+project.fragment.lock.json
+artifacts/
+
+# StyleCop
+StyleCopReport.xml
+
+# Files built by Visual Studio
+*_i.cs
+*_g.cs
+*_h.h
+*.build.csproj
+*.build.csproj.user
+
+# Coverage Results
+CoverageResult.xml
+
+# Web Test Results
+*.webtestresult
+
+# Razor Pages
+*.cshtml~
+
+# Windows Forms
+*.usercontrol.designer.cs
+*.form.designer.cs
+*.dataset.designer.cs
+*.resx.designer.cs
+*.settings.designer.cs
+*.xsd.designer.cs
+*.xsscheme.designer.cs
+
+# ClickOnce directory
+publish/
+
+# Publish Profiles
+*.pubxml
+*.pubxml.user
+
+# Code signing security file
+*.pfx
+
+# Code Analysis
+*.ca.ruleset
+*.sarif
+
+# NuGet Packages
+*.nupkg
+!src/**/packages/*
+
+# Windows Phone
+.wpftmp
+
+# Syncfusion
+syncfusion.licx
+
+# Telerik
+*.Telerik.TestingFramework.config
+
+# Backup Files
+*.bak
+*.tmp
+*.old
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# IDE Generated files
+.idea/
+*.swp
+*.swo
+*~
+
+# Logs
+*.log
+
+# User-specific configurations
+appsettings.Development.json
+appsettings.Production.json
+
+# Local configuration overrides
+local.settings.json
+
+# WPF specific
+*.g.i.cs
+*.g.cs
+
+.vs
