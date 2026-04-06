@@ -7,6 +7,7 @@ using System.Diagnostics;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Data;
+using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 
 namespace MyAnalyzer;
@@ -32,6 +33,7 @@ public partial class MainWindow : Window
             "settings.json");
 
         InitializeComponent();
+        TrySetWindowIcon();
 
         RootUrlsGrid.ItemsSource = _rootUrlItems;
         _recordViewSource.Source = _recordItems;
@@ -48,6 +50,18 @@ public partial class MainWindow : Window
         LoadSettingsFromFile();
         Loaded += async (_, _) => await LoadDashboardDataAsync();
         Closing += (_, _) => SaveSettingsToFile();
+    }
+
+    private void TrySetWindowIcon()
+    {
+        try
+        {
+            Icon = new BitmapImage(new Uri("pack://application:,,,/Assets/AppIcon.ico", UriKind.Absolute));
+        }
+        catch
+        {
+            // Ignore icon load failures so UI initialization can continue.
+        }
     }
 
     private async void RefreshButton_Click(object sender, RoutedEventArgs e)
