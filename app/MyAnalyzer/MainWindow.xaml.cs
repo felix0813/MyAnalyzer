@@ -2,11 +2,13 @@ using System.Collections.ObjectModel;
 using System.Globalization;
 using System.IO;
 using System.Net.Http;
+using System.Reflection;
 using System.Text.Json;
 using System.Diagnostics;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Data;
+using System.Windows.Input;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 
@@ -124,6 +126,132 @@ public partial class MainWindow : Window
             SetStatus("跳转失败", "#B42318");
             MessageBox.Show(this, $"无法打开链接：{ex.Message}", "错误", MessageBoxButton.OK, MessageBoxImage.Error);
         }
+    }
+
+    private void DataGrid_PreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.C || Keyboard.Modifiers != ModifierKeys.Control || sender is not DataGrid grid)
+        {
+            return;
+        }
+
+        if (grid.SelectedCells.Count > 0)
+        {
+            CopyCurrentCell(grid);
+        }
+        else
+        {
+            CopyCurrentRow(grid);
+        }
+
+        e.Handled = true;
+    }
+
+    private void CopyCellMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not MenuItem menuItem
+            || menuItem.Parent is not ContextMenu contextMenu
+            || contextMenu.PlacementTarget is not DataGrid grid)
+        {
+            return;
+        }
+
+        CopyCurrentCell(grid);
+    }
+
+    private void CopyRowMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not MenuItem menuItem
+            || menuItem.Parent is not ContextMenu contextMenu
+            || contextMenu.PlacementTarget is not DataGrid grid)
+        {
+            return;
+        }
+
+        CopyCurrentRow(grid);
+    }
+
+    private void CopyCurrentCell(DataGrid grid)
+    {
+        var cellInfo = grid.CurrentCell;
+        if (cellInfo.Item is null || cellInfo.Column is null)
+        {
+            SetStatus("请先选中要复制的单元格。", "#B42318");
+            return;
+        }
+
+        var value = GetCellValue(cellInfo.Item, cellInfo.Column);
+        if (string.IsNullOrEmpty(value))
+        {
+            SetStatus("当前单元格为空。", "#9A6C00");
+            return;
+        }
+
+        Clipboard.SetText(value);
+        SetStatus("已复制单元格内容。", "#2A7E2E");
+    }
+
+    private void CopyCurrentRow(DataGrid grid)
+    {
+        var rowItem = grid.SelectedItem ?? grid.CurrentItem;
+        if (rowItem is null)
+        {
+            SetStatus("请先选中要复制的整行。", "#B42318");
+            return;
+        }
+
+        var values = new List<string>();
+        foreach (var column in grid.Columns.OrderBy(c => c.DisplayIndex))
+        {
+            var text = GetCellValue(rowItem, column);
+            values.Add(text);
+        }
+
+        var rowText = string.Join('\t', values);
+        if (string.IsNullOrEmpty(rowText))
+        {
+            SetStatus("当前行为空。", "#9A6C00");
+            return;
+        }
+
+        Clipboard.SetText(rowText);
+        SetStatus("已复制整行内容。", "#2A7E2E");
+    }
+
+    private static string GetCellValue(object rowItem, DataGridColumn column)
+    {
+        if (column is DataGridBoundColumn boundColumn && boundColumn.Binding is Binding binding)
+        {
+            var path = binding.Path?.Path;
+            if (!string.IsNullOrWhiteSpace(path))
+            {
+                return GetPropertyValueByPath(rowItem, path);
+            }
+        }
+
+        return string.Empty;
+    }
+
+    private static string GetPropertyValueByPath(object source, string path)
+    {
+        object? current = source;
+        foreach (var segment in path.Split('.'))
+        {
+            if (current is null)
+            {
+                return string.Empty;
+            }
+
+            var property = current.GetType().GetProperty(segment, BindingFlags.Instance | BindingFlags.Public | BindingFlags.IgnoreCase);
+            if (property is null)
+            {
+                return string.Empty;
+            }
+
+            current = property.GetValue(current);
+        }
+
+        return current?.ToString() ?? string.Empty;
     }
 
     private void RecordViewSource_Filter(object sender, FilterEventArgs e)

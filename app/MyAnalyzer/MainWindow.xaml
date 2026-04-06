@@ -120,8 +120,16 @@
                               GridLinesVisibility="Horizontal"
                               BorderThickness="0"
                               ScrollViewer.HorizontalScrollBarVisibility="Auto"
-                              SelectionMode="Single"
+                              SelectionMode="Extended"
+                              SelectionUnit="CellOrRowHeader"
+                              PreviewKeyDown="DataGrid_PreviewKeyDown"
                               SelectionChanged="RootUrlsGrid_SelectionChanged">
+                        <DataGrid.ContextMenu>
+                            <ContextMenu>
+                                <MenuItem Header="复制单元格" Click="CopyCellMenuItem_Click" />
+                                <MenuItem Header="复制整行" Click="CopyRowMenuItem_Click" />
+                            </ContextMenu>
+                        </DataGrid.ContextMenu>
                         <DataGrid.Columns>
                             <DataGridTextColumn Header="Root URL" Binding="{Binding RootURL}" Width="260" />
                             <DataGridTextColumn Header="次数" Binding="{Binding VisitCountTotal}" Width="100" />
@@ -192,8 +200,16 @@
                               GridLinesVisibility="Horizontal"
                               BorderThickness="0"
                               ScrollViewer.HorizontalScrollBarVisibility="Auto"
-                              SelectionMode="Single"
+                              SelectionMode="Extended"
+                              SelectionUnit="CellOrRowHeader"
+                              PreviewKeyDown="DataGrid_PreviewKeyDown"
                               MouseDoubleClick="RecordsGrid_MouseDoubleClick">
+                        <DataGrid.ContextMenu>
+                            <ContextMenu>
+                                <MenuItem Header="复制单元格" Click="CopyCellMenuItem_Click" />
+                                <MenuItem Header="复制整行" Click="CopyRowMenuItem_Click" />
+                            </ContextMenu>
+                        </DataGrid.ContextMenu>
                         <DataGrid.Columns>
                             <DataGridTextColumn Header="标题" Binding="{Binding DisplayTitle}" Width="320" />
                             <DataGridTextColumn Header="完整 URL" Binding="{Binding URL}" Width="520" />
