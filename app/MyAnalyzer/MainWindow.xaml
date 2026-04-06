@@ -1,12 +1,147 @@
-﻿<Window x:Class="MyAnalyzer.MainWindow"
+<Window x:Class="MyAnalyzer.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-        xmlns:local="clr-namespace:MyAnalyzer"
         mc:Ignorable="d"
-        Title="MainWindow" Height="450" Width="800">
-    <Grid>
+        Title="MyAnalyzer 历史分析"
+        Height="760"
+        Width="1220"
+        Background="#F3F6FB"
+        MinHeight="680"
+        MinWidth="1024">
+    <Grid Margin="20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
 
+        <Border CornerRadius="14" Padding="20" Margin="0,0,0,16" Background="White" BorderBrush="#E6EAF2" BorderThickness="1">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <StackPanel>
+                    <TextBlock Text="MyAnalyzer 浏览历史仪表盘" FontSize="24" FontWeight="SemiBold" Foreground="#1D2433" />
+                    <TextBlock Text="展示最常用网站（根 URL + 最新完整 URL）与历史明细" Margin="0,4,0,0" Foreground="#637086" FontSize="14" />
+                </StackPanel>
+
+                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock Text="最近天数" VerticalAlignment="Center" Margin="0,0,8,0" Foreground="#455066"/>
+                    <ComboBox Width="80" SelectedValuePath="Tag" SelectedValue="3" SelectionChanged="DaysFilter_SelectionChanged">
+                        <ComboBoxItem Content="3 天" Tag="3" IsSelected="True" />
+                        <ComboBoxItem Content="7 天" Tag="7" />
+                        <ComboBoxItem Content="14 天" Tag="14" />
+                        <ComboBoxItem Content="30 天" Tag="30" />
+                    </ComboBox>
+                    <Button Content="刷新" Width="88" Height="34" Margin="12,0,0,0" Click="RefreshButton_Click" Background="#2F6FED" Foreground="White" BorderThickness="0" FontWeight="SemiBold" />
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <Border Grid.Row="1" CornerRadius="12" Padding="16" Margin="0,0,0,16" Background="White" BorderBrush="#E6EAF2" BorderThickness="1">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <TextBlock VerticalAlignment="Center" Text="后端地址" Margin="0,0,12,0" Foreground="#455066"/>
+                <TextBox x:Name="ApiBaseUrlTextBox" Grid.Column="1" VerticalAlignment="Center" Height="34" Padding="10,6" Text="http://127.0.0.1:8000/myAnalyzer"/>
+                <TextBlock x:Name="StatusTextBlock" Grid.Column="2" Margin="12,0,0,0" VerticalAlignment="Center" Foreground="#2A7E2E" FontWeight="SemiBold" Text="就绪" />
+            </Grid>
+        </Border>
+
+        <UniformGrid Grid.Row="2" Columns="4" Margin="0,0,0,16">
+            <Border Margin="0,0,12,0" CornerRadius="12" Background="#193A7A" Padding="14">
+                <StackPanel>
+                    <TextBlock Text="最常用网站数" Foreground="#C9D9FB" FontSize="12" />
+                    <TextBlock x:Name="RootSiteCountText" Text="0" FontSize="26" FontWeight="SemiBold" Foreground="White" />
+                </StackPanel>
+            </Border>
+            <Border Margin="0,0,12,0" CornerRadius="12" Background="#2258B8" Padding="14">
+                <StackPanel>
+                    <TextBlock Text="总访问次数" Foreground="#D7E7FF" FontSize="12" />
+                    <TextBlock x:Name="TotalVisitsText" Text="0" FontSize="26" FontWeight="SemiBold" Foreground="White" />
+                </StackPanel>
+            </Border>
+            <Border Margin="0,0,12,0" CornerRadius="12" Background="#3477F0" Padding="14">
+                <StackPanel>
+                    <TextBlock Text="最近记录数" Foreground="#DDE9FF" FontSize="12" />
+                    <TextBlock x:Name="RecentRecordCountText" Text="0" FontSize="26" FontWeight="SemiBold" Foreground="White" />
+                </StackPanel>
+            </Border>
+            <Border CornerRadius="12" Background="#5B92F4" Padding="14">
+                <StackPanel>
+                    <TextBlock Text="最后访问时间" Foreground="#EBF2FF" FontSize="12" />
+                    <TextBlock x:Name="LastVisitText" Text="--" FontSize="18" FontWeight="SemiBold" Foreground="White" TextTrimming="CharacterEllipsis" />
+                </StackPanel>
+            </Border>
+        </UniformGrid>
+
+        <Grid Grid.Row="3">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="1.25*" />
+                <ColumnDefinition Width="12" />
+                <ColumnDefinition Width="1.75*" />
+            </Grid.ColumnDefinitions>
+
+            <Border Grid.Column="0" Background="White" CornerRadius="12" BorderBrush="#E6EAF2" BorderThickness="1" Padding="12">
+                <DockPanel>
+                    <TextBlock DockPanel.Dock="Top" Margin="4,2,0,10" FontSize="17" FontWeight="SemiBold" Text="最常用网站（Root URL 聚合）" Foreground="#1D2433"/>
+                    <DataGrid x:Name="RootUrlsGrid"
+                              AutoGenerateColumns="False"
+                              IsReadOnly="True"
+                              HeadersVisibility="Column"
+                              GridLinesVisibility="Horizontal"
+                              BorderThickness="0"
+                              SelectionMode="Single"
+                              SelectionChanged="RootUrlsGrid_SelectionChanged">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="Root URL" Binding="{Binding RootURL}" Width="1.3*" />
+                            <DataGridTextColumn Header="次数" Binding="{Binding VisitCountTotal}" Width="0.5*" />
+                            <DataGridTextColumn Header="最近访问" Binding="{Binding DisplayLastVisitedAt}" Width="0.8*" />
+                            <DataGridTextColumn Header="最新完整 URL" Binding="{Binding LatestURL}" Width="1.6*" />
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </DockPanel>
+            </Border>
+
+            <Border Grid.Column="2" Background="White" CornerRadius="12" BorderBrush="#E6EAF2" BorderThickness="1" Padding="12">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+
+                    <TextBlock Text="历史记录（完整 URL）" FontSize="17" FontWeight="SemiBold" Foreground="#1D2433" Margin="4,2,0,10" />
+                    <TextBox x:Name="SearchTextBox" Grid.Row="1" Height="34" Margin="0,0,0,10" Padding="10,6" TextChanged="SearchTextBox_TextChanged" ToolTip="输入关键词筛选标题、URL、Root URL" />
+
+                    <DataGrid x:Name="RecordsGrid"
+                              Grid.Row="2"
+                              AutoGenerateColumns="False"
+                              IsReadOnly="True"
+                              HeadersVisibility="Column"
+                              GridLinesVisibility="Horizontal"
+                              BorderThickness="0"
+                              SelectionMode="Single">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="标题" Binding="{Binding DisplayTitle}" Width="1.2*" />
+                            <DataGridTextColumn Header="完整 URL" Binding="{Binding URL}" Width="2*" />
+                            <DataGridTextColumn Header="Root URL" Binding="{Binding RootURL}" Width="1.2*" />
+                            <DataGridTextColumn Header="访问时间" Binding="{Binding DisplayVisitedAt}" Width="1*" />
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </Grid>
+            </Border>
+        </Grid>
+
+        <TextBlock Grid.Row="4" Margin="4,10,0,0" Foreground="#6A7589" Text="提示：点击左侧某个 Root URL，可在右侧只查看该站点相关完整 URL 的历史记录。" />
     </Grid>
 </Window>
