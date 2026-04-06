@@ -40,6 +40,8 @@ type listResponse struct {
 	Limit      int      `json:"limit"`
 	Offset     int      `json:"offset"`
 	Search     string   `json:"search"`
+	StartTime  string   `json:"startTime,omitempty"`
+	EndTime    string   `json:"endTime,omitempty"`
 	RecentOnly bool     `json:"recentOnly"`
 }
 

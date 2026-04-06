@@ -322,6 +322,49 @@ func (r *Repository) List(ctx context.Context, limit, offset int, search string)
 	return items, total, nil
 }
 
+func (r *Repository) SearchRecords(ctx context.Context, limit, offset int, keyword string, startTime, endTime *time.Time) ([]Record, int, error) {
+	whereParts := make([]string, 0, 3)
+	args := make([]any, 0, 4)
+	nextArg := 1
+
+	if trimmed := strings.TrimSpace(keyword); trimmed != "" {
+		q := "%" + trimmed + "%"
+		whereParts = append(whereParts, fmt.Sprintf("(url ILIKE $%d OR title ILIKE $%d)", nextArg, nextArg+1))
+		args = append(args, q, q)
+		nextArg += 2
+	}
+
+	if startTime != nil {
+		whereParts = append(whereParts, fmt.Sprintf("visited_at >= $%d", nextArg))
+		args = append(args, *startTime)
+		nextArg++
+	}
+
+	if endTime != nil {
+		whereParts = append(whereParts, fmt.Sprintf("visited_at <= $%d", nextArg))
+		args = append(args, *endTime)
+		nextArg++
+	}
+
+	whereClause := ""
+	if len(whereParts) > 0 {
+		whereClause = "WHERE " + strings.Join(whereParts, " AND ")
+	}
+
+	items, err := r.fetchRecords(ctx, whereClause, "ORDER BY visited_at DESC, id DESC", fmt.Sprintf("LIMIT %d OFFSET %d", limit, offset), args...)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	countSQL := fmt.Sprintf(`SELECT COUNT(*) FROM browser_history %s;`, whereClause)
+	total, err := r.db.QueryInt(ctx, countSQL, args...)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	return items, total, nil
+}
+
 func (r *Repository) ListRecent(ctx context.Context, limit int) ([]Record, error) {
 	return r.fetchRecords(ctx, "WHERE recent_rank <= $1", "ORDER BY visited_at DESC, id DESC", "", limit)
 }

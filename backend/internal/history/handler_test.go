@@ -1,6 +1,9 @@
 package history
 
-import "testing"
+import (
+	"testing"
+	"time"
+)
 
 func TestParseIDFromPath(t *testing.T) {
 	id, err := parseIDFromPath("/api/history/records/42", "/api/history/records/")
@@ -47,5 +50,34 @@ func TestNormalizeRootURL(t *testing.T) {
 				t.Fatalf("expected %q, got %q", tt.want, got)
 			}
 		})
+	}
+}
+
+func TestParseRFC3339Optional(t *testing.T) {
+	got, err := parseRFC3339Optional("2026-04-06T10:30:00+08:00")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got == nil {
+		t.Fatal("expected parsed time, got nil")
+	}
+	if got.Format(time.RFC3339) != "2026-04-06T02:30:00Z" {
+		t.Fatalf("unexpected UTC conversion: %s", got.Format(time.RFC3339))
+	}
+}
+
+func TestParseRFC3339OptionalEmpty(t *testing.T) {
+	got, err := parseRFC3339Optional("")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got != nil {
+		t.Fatalf("expected nil time, got %v", *got)
+	}
+}
+
+func TestParseRFC3339OptionalRejectsInvalid(t *testing.T) {
+	if _, err := parseRFC3339Optional("2026-04-06"); err == nil {
+		t.Fatal("expected parsing error for non-RFC3339 format")
 	}
 }
