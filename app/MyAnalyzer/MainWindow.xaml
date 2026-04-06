@@ -119,13 +119,14 @@
                               HeadersVisibility="Column"
                               GridLinesVisibility="Horizontal"
                               BorderThickness="0"
+                              ScrollViewer.HorizontalScrollBarVisibility="Auto"
                               SelectionMode="Single"
                               SelectionChanged="RootUrlsGrid_SelectionChanged">
                         <DataGrid.Columns>
-                            <DataGridTextColumn Header="Root URL" Binding="{Binding RootURL}" Width="1.3*" />
-                            <DataGridTextColumn Header="次数" Binding="{Binding VisitCountTotal}" Width="0.5*" />
-                            <DataGridTextColumn Header="最近访问" Binding="{Binding DisplayLastVisitedAt}" Width="0.8*" />
-                            <DataGridTextColumn Header="最新完整 URL" Binding="{Binding LatestURL}" Width="1.6*" />
+                            <DataGridTextColumn Header="Root URL" Binding="{Binding RootURL}" Width="260" />
+                            <DataGridTextColumn Header="次数" Binding="{Binding VisitCountTotal}" Width="100" />
+                            <DataGridTextColumn Header="最近访问" Binding="{Binding DisplayLastVisitedAt}" Width="180" />
+                            <DataGridTextColumn Header="最新完整 URL" Binding="{Binding LatestURL}" Width="420" />
                         </DataGrid.Columns>
                     </DataGrid>
                 </DockPanel>
@@ -190,13 +191,14 @@
                               HeadersVisibility="Column"
                               GridLinesVisibility="Horizontal"
                               BorderThickness="0"
+                              ScrollViewer.HorizontalScrollBarVisibility="Auto"
                               SelectionMode="Single"
                               MouseDoubleClick="RecordsGrid_MouseDoubleClick">
                         <DataGrid.Columns>
-                            <DataGridTextColumn Header="标题" Binding="{Binding DisplayTitle}" Width="1.2*" />
-                            <DataGridTextColumn Header="完整 URL" Binding="{Binding URL}" Width="2*" />
-                            <DataGridTextColumn Header="Root URL" Binding="{Binding RootURL}" Width="1.2*" />
-                            <DataGridTextColumn Header="访问时间" Binding="{Binding DisplayVisitedAt}" Width="1*" />
+                            <DataGridTextColumn Header="标题" Binding="{Binding DisplayTitle}" Width="320" />
+                            <DataGridTextColumn Header="完整 URL" Binding="{Binding URL}" Width="520" />
+                            <DataGridTextColumn Header="Root URL" Binding="{Binding RootURL}" Width="260" />
+                            <DataGridTextColumn Header="访问时间" Binding="{Binding DisplayVisitedAt}" Width="220" />
                         </DataGrid.Columns>
                     </DataGrid>
                 </Grid>
