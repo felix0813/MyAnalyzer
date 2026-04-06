@@ -81,11 +81,6 @@ public partial class MainWindow : Window
         }
     }
 
-    private void SearchTextBox_TextChanged(object sender, TextChangedEventArgs e)
-    {
-        _recordViewSource.View.Refresh();
-    }
-
     private void RootUrlsGrid_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         _selectedRootUrl = (RootUrlsGrid.SelectedItem as RootUrlStatItem)?.RootURL;
@@ -139,16 +134,10 @@ public partial class MainWindow : Window
             return;
         }
 
-        var keyword = SearchTextBox.Text?.Trim() ?? string.Empty;
-        var keywordMatch = string.IsNullOrEmpty(keyword)
-            || item.DisplayTitle.Contains(keyword, StringComparison.OrdinalIgnoreCase)
-            || item.URL.Contains(keyword, StringComparison.OrdinalIgnoreCase)
-            || item.RootURL.Contains(keyword, StringComparison.OrdinalIgnoreCase);
-
         var rootMatch = string.IsNullOrWhiteSpace(_selectedRootUrl)
             || item.RootURL.Equals(_selectedRootUrl, StringComparison.OrdinalIgnoreCase);
 
-        e.Accepted = keywordMatch && rootMatch;
+        e.Accepted = rootMatch;
     }
 
     private async Task LoadDashboardDataAsync()
@@ -157,7 +146,7 @@ public partial class MainWindow : Window
         {
             SetStatus("加载中...", "#9A6C00");
             var rootStats = await GetRootUrlStatsAsync(_currentDays);
-            var records = await GetRecentRecordsAsync(300);
+            var records = await SearchHistoryRecordsAsync();
 
             _rootUrlItems.Clear();
             foreach (var item in rootStats.OrderByDescending(i => i.VisitCountTotal))
@@ -200,9 +189,24 @@ public partial class MainWindow : Window
         return response?.Items ?? [];
     }
 
-    private async Task<List<HistoryRecordItem>> GetRecentRecordsAsync(int limit)
+    private async Task<List<HistoryRecordItem>> SearchHistoryRecordsAsync()
     {
-        var response = await GetFromApiAsync<RecordListResponse>($"/api/history/recent?limit={limit}");
+        var keyword = Uri.EscapeDataString((KeywordTextBox.Text ?? string.Empty).Trim());
+        var startTime = StartDatePicker.SelectedDate?.Date.ToString("yyyy-MM-dd'T'00:00:00'Z'", CultureInfo.InvariantCulture) ?? string.Empty;
+        var endTime = EndDatePicker.SelectedDate?.Date.AddDays(1).AddSeconds(-1).ToString("yyyy-MM-dd'T'HH:mm:ss'Z'", CultureInfo.InvariantCulture) ?? string.Empty;
+
+        var query = $"/api/history/search?limit=500&offset=0&keyword={keyword}";
+        if (!string.IsNullOrEmpty(startTime))
+        {
+            query += $"&startTime={Uri.EscapeDataString(startTime)}";
+        }
+
+        if (!string.IsNullOrEmpty(endTime))
+        {
+            query += $"&endTime={Uri.EscapeDataString(endTime)}";
+        }
+
+        var response = await GetFromApiAsync<RecordListResponse>(query);
         return response?.Items ?? [];
     }
 
@@ -216,13 +220,60 @@ public partial class MainWindow : Window
 
         var url = $"{baseUrl}{path}";
         using var response = await _httpClient.GetAsync(url);
-        response.EnsureSuccessStatusCode();
+        if (!response.IsSuccessStatusCode)
+        {
+            var message = await TryReadApiErrorAsync(response);
+            throw new InvalidOperationException(message);
+        }
 
         await using var stream = await response.Content.ReadAsStreamAsync();
         return await JsonSerializer.DeserializeAsync<T>(stream, new JsonSerializerOptions
         {
             PropertyNameCaseInsensitive = true,
         });
+    }
+
+    private async Task<string> TryReadApiErrorAsync(HttpResponseMessage response)
+    {
+        try
+        {
+            await using var stream = await response.Content.ReadAsStreamAsync();
+            var error = await JsonSerializer.DeserializeAsync<ApiErrorResponse>(stream, new JsonSerializerOptions
+            {
+                PropertyNameCaseInsensitive = true,
+            });
+            if (!string.IsNullOrWhiteSpace(error?.Error))
+            {
+                return $"请求失败：{error.Error} (HTTP {(int)response.StatusCode})";
+            }
+        }
+        catch
+        {
+            // Ignore parsing errors and use status text fallback.
+        }
+
+        var statusText = response.ReasonPhrase ?? response.StatusCode.ToString();
+        return $"请求失败：{statusText} (HTTP {(int)response.StatusCode})";
+    }
+
+    private async void SearchButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (StartDatePicker.SelectedDate.HasValue && EndDatePicker.SelectedDate.HasValue
+            && StartDatePicker.SelectedDate.Value.Date > EndDatePicker.SelectedDate.Value.Date)
+        {
+            SetStatus("开始日期不能晚于结束日期。", "#B42318");
+            return;
+        }
+
+        await LoadDashboardDataAsync();
+    }
+
+    private async void ResetSearchButton_Click(object sender, RoutedEventArgs e)
+    {
+        KeywordTextBox.Text = string.Empty;
+        StartDatePicker.SelectedDate = null;
+        EndDatePicker.SelectedDate = null;
+        await LoadDashboardDataAsync();
     }
 
     private void SetStatus(string message, string colorHex)
@@ -324,4 +375,9 @@ public class HistoryRecordItem
 public class AppSettings
 {
     public string ApiBaseUrl { get; set; } = string.Empty;
+}
+
+public class ApiErrorResponse
+{
+    public string Error { get; set; } = string.Empty;
 }

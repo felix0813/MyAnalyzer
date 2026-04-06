@@ -26,6 +26,7 @@ func (h *Handler) Routes() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/myAnalyzer/healthz", h.handleHealth)
 	mux.HandleFunc("/myAnalyzer/api/history/recent", h.handleRecent)
+	mux.HandleFunc("/myAnalyzer/api/history/search", h.handleSearch)
 	mux.HandleFunc("/myAnalyzer/api/history/root-urls", h.handleRootURLs)
 	mux.HandleFunc("/myAnalyzer/api/history/records/", h.handleRecordByID)
 	mux.HandleFunc("/myAnalyzer/api/history/records", h.handleRecords)
@@ -185,6 +186,53 @@ func (h *Handler) handleRootURLs(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, rootURLStatsResponse{Items: items, Days: days, Limit: limit})
 }
 
+func (h *Handler) handleSearch(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		h.writeRequestError(w, r, http.StatusMethodNotAllowed, "method not allowed", nil)
+		return
+	}
+
+	limit := parseInt(r.URL.Query().Get("limit"), 100, 1, 500)
+	offset := parseInt(r.URL.Query().Get("offset"), 0, 0, 100000)
+	keyword := strings.TrimSpace(r.URL.Query().Get("keyword"))
+	startRaw := strings.TrimSpace(r.URL.Query().Get("startTime"))
+	endRaw := strings.TrimSpace(r.URL.Query().Get("endTime"))
+
+	startTime, err := parseRFC3339Optional(startRaw)
+	if err != nil {
+		h.writeRequestError(w, r, http.StatusBadRequest, "startTime must be RFC3339", err)
+		return
+	}
+
+	endTime, err := parseRFC3339Optional(endRaw)
+	if err != nil {
+		h.writeRequestError(w, r, http.StatusBadRequest, "endTime must be RFC3339", err)
+		return
+	}
+
+	if startTime != nil && endTime != nil && startTime.After(*endTime) {
+		h.writeRequestError(w, r, http.StatusBadRequest, "startTime must be earlier than or equal to endTime", nil)
+		return
+	}
+
+	items, total, err := h.repo.SearchRecords(r.Context(), limit, offset, keyword, startTime, endTime)
+	if err != nil {
+		h.writeRequestError(w, r, http.StatusInternalServerError, err.Error(), err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, listResponse{
+		Items:      items,
+		Total:      total,
+		Limit:      limit,
+		Offset:     offset,
+		Search:     keyword,
+		StartTime:  startRaw,
+		EndTime:    endRaw,
+		RecentOnly: false,
+	})
+}
+
 func parseIDFromPath(path, prefix string) (int64, error) {
 	rawID := strings.TrimPrefix(path, prefix)
 	if rawID == "" || rawID == path || strings.Contains(rawID, "/") {
@@ -212,6 +260,19 @@ func parseInt(raw string, fallback, min, max int) int {
 		return max
 	}
 	return value
+}
+
+func parseRFC3339Optional(raw string) (*time.Time, error) {
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" {
+		return nil, nil
+	}
+	ts, err := time.Parse(time.RFC3339, trimmed)
+	if err != nil {
+		return nil, err
+	}
+	utc := ts.UTC()
+	return &utc, nil
 }
 
 func (h *Handler) handleRepositoryError(w http.ResponseWriter, r *http.Request, err error, id int64) {
