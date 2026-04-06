@@ -33,7 +33,19 @@
 
                 <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
                     <TextBlock Text="最近天数" VerticalAlignment="Center" Margin="0,0,8,0" Foreground="#455066"/>
-                    <ComboBox Width="80" SelectedValuePath="Tag" SelectedValue="3" SelectionChanged="DaysFilter_SelectionChanged">
+                    <ComboBox Width="80"
+                              Height="34"
+                              VerticalContentAlignment="Center"
+                              SelectedValuePath="Tag"
+                              SelectedValue="3"
+                              SelectionChanged="DaysFilter_SelectionChanged">
+                        <ComboBox.ItemContainerStyle>
+                            <Style TargetType="ComboBoxItem">
+                                <Setter Property="VerticalContentAlignment" Value="Center" />
+                                <Setter Property="HorizontalContentAlignment" Value="Center" />
+                                <Setter Property="MinHeight" Value="30" />
+                            </Style>
+                        </ComboBox.ItemContainerStyle>
                         <ComboBoxItem Content="3 天" Tag="3" IsSelected="True" />
                         <ComboBoxItem Content="7 天" Tag="7" />
                         <ComboBoxItem Content="14 天" Tag="14" />
@@ -52,7 +64,13 @@
                     <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
                 <TextBlock VerticalAlignment="Center" Text="后端地址" Margin="0,0,12,0" Foreground="#455066"/>
-                <TextBox x:Name="ApiBaseUrlTextBox" Grid.Column="1" VerticalAlignment="Center" Height="34" Padding="10,6" Text="http://127.0.0.1:8000/myAnalyzer"/>
+                <TextBox x:Name="ApiBaseUrlTextBox"
+                         Grid.Column="1"
+                         VerticalAlignment="Center"
+                         Height="34"
+                         Padding="10,6"
+                         Text="http://127.0.0.1:8000/myAnalyzer"
+                         TextChanged="ApiBaseUrlTextBox_TextChanged" />
                 <TextBlock x:Name="StatusTextBlock" Grid.Column="2" Margin="12,0,0,0" VerticalAlignment="Center" Foreground="#2A7E2E" FontWeight="SemiBold" Text="就绪" />
             </Grid>
         </Border>
@@ -130,7 +148,8 @@
                               HeadersVisibility="Column"
                               GridLinesVisibility="Horizontal"
                               BorderThickness="0"
-                              SelectionMode="Single">
+                              SelectionMode="Single"
+                              MouseDoubleClick="RecordsGrid_MouseDoubleClick">
                         <DataGrid.Columns>
                             <DataGridTextColumn Header="标题" Binding="{Binding DisplayTitle}" Width="1.2*" />
                             <DataGridTextColumn Header="完整 URL" Binding="{Binding URL}" Width="2*" />

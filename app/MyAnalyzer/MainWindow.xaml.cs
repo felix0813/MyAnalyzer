@@ -1,10 +1,13 @@
 using System.Collections.ObjectModel;
 using System.Globalization;
+using System.IO;
 using System.Net.Http;
 using System.Text.Json;
+using System.Diagnostics;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Data;
+using System.Windows.Threading;
 
 namespace MyAnalyzer;
 
@@ -14,12 +17,20 @@ public partial class MainWindow : Window
     private readonly ObservableCollection<RootUrlStatItem> _rootUrlItems = [];
     private readonly ObservableCollection<HistoryRecordItem> _recordItems = [];
     private readonly CollectionViewSource _recordViewSource = new();
+    private readonly DispatcherTimer _settingsSaveTimer = new();
+    private readonly string _settingsFilePath;
 
     private string? _selectedRootUrl;
     private int _currentDays = 3;
+    private bool _suspendSettingsSave;
 
     public MainWindow()
     {
+        _settingsFilePath = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+            "MyAnalyzer",
+            "settings.json");
+
         InitializeComponent();
 
         RootUrlsGrid.ItemsSource = _rootUrlItems;
@@ -27,7 +38,16 @@ public partial class MainWindow : Window
         _recordViewSource.Filter += RecordViewSource_Filter;
         RecordsGrid.ItemsSource = _recordViewSource.View;
 
+        _settingsSaveTimer.Interval = TimeSpan.FromMilliseconds(400);
+        _settingsSaveTimer.Tick += (_, _) =>
+        {
+            _settingsSaveTimer.Stop();
+            SaveSettingsToFile();
+        };
+
+        LoadSettingsFromFile();
         Loaded += async (_, _) => await LoadDashboardDataAsync();
+        Closing += (_, _) => SaveSettingsToFile();
     }
 
     private async void RefreshButton_Click(object sender, RoutedEventArgs e)
@@ -56,6 +76,45 @@ public partial class MainWindow : Window
     {
         _selectedRootUrl = (RootUrlsGrid.SelectedItem as RootUrlStatItem)?.RootURL;
         _recordViewSource.View.Refresh();
+    }
+
+    private void ApiBaseUrlTextBox_TextChanged(object sender, TextChangedEventArgs e)
+    {
+        if (_suspendSettingsSave)
+        {
+            return;
+        }
+
+        _settingsSaveTimer.Stop();
+        _settingsSaveTimer.Start();
+    }
+
+    private void RecordsGrid_MouseDoubleClick(object sender, System.Windows.Input.MouseButtonEventArgs e)
+    {
+        if (RecordsGrid.SelectedItem is not HistoryRecordItem item || string.IsNullOrWhiteSpace(item.URL))
+        {
+            return;
+        }
+
+        if (!Uri.TryCreate(item.URL, UriKind.Absolute, out var uri))
+        {
+            SetStatus("该记录 URL 无效，无法跳转。", "#B42318");
+            return;
+        }
+
+        try
+        {
+            Process.Start(new ProcessStartInfo(uri.AbsoluteUri)
+            {
+                UseShellExecute = true
+            });
+            SetStatus("已打开所选记录。", "#2A7E2E");
+        }
+        catch (Exception ex)
+        {
+            SetStatus("跳转失败", "#B42318");
+            MessageBox.Show(this, $"无法打开链接：{ex.Message}", "错误", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
     }
 
     private void RecordViewSource_Filter(object sender, FilterEventArgs e)
@@ -157,6 +216,64 @@ public partial class MainWindow : Window
         StatusTextBlock.Text = message;
         StatusTextBlock.Foreground = (System.Windows.Media.Brush)new System.Windows.Media.BrushConverter().ConvertFrom(colorHex)!;
     }
+
+    private void LoadSettingsFromFile()
+    {
+        try
+        {
+            if (!File.Exists(_settingsFilePath))
+            {
+                return;
+            }
+
+            var json = File.ReadAllText(_settingsFilePath);
+            var settings = JsonSerializer.Deserialize<AppSettings>(json);
+            if (settings is null || string.IsNullOrWhiteSpace(settings.ApiBaseUrl))
+            {
+                return;
+            }
+
+            _suspendSettingsSave = true;
+            ApiBaseUrlTextBox.Text = settings.ApiBaseUrl.Trim();
+        }
+        catch
+        {
+            // 忽略本地配置读取失败，继续使用默认值。
+        }
+        finally
+        {
+            _suspendSettingsSave = false;
+        }
+    }
+
+    private void SaveSettingsToFile()
+    {
+        if (_suspendSettingsSave)
+        {
+            return;
+        }
+
+        try
+        {
+            var baseUrl = (ApiBaseUrlTextBox.Text ?? string.Empty).Trim();
+            var directory = Path.GetDirectoryName(_settingsFilePath);
+            if (!string.IsNullOrWhiteSpace(directory))
+            {
+                Directory.CreateDirectory(directory);
+            }
+
+            var json = JsonSerializer.Serialize(new AppSettings
+            {
+                ApiBaseUrl = baseUrl
+            }, new JsonSerializerOptions { WriteIndented = true });
+
+            File.WriteAllText(_settingsFilePath, json);
+        }
+        catch
+        {
+            // 忽略保存失败，避免影响主流程。
+        }
+    }
 }
 
 public class RootUrlStatsResponse
@@ -188,4 +305,9 @@ public class HistoryRecordItem
     public string DisplayVisitedDate { get; set; } = string.Empty;
     public string DisplayVisitedTime { get; set; } = string.Empty;
     public DateTime VisitedAt { get; set; }
+}
+
+public class AppSettings
+{
+    public string ApiBaseUrl { get; set; } = string.Empty;
 }
