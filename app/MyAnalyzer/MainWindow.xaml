@@ -9,7 +9,8 @@
         Width="1220"
         Background="#F3F6FB"
         MinHeight="680"
-        MinWidth="1024">
+        MinWidth="1024"
+        Icon="Assets/AppIcon-32.png">
     <Grid Margin="20">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
