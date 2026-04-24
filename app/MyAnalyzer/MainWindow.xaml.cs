@@ -38,6 +38,8 @@ public partial class MainWindow : Window
         TrySetWindowIcon();
 
         RootUrlsGrid.ItemsSource = _rootUrlItems;
+        RootUrlsGrid.CurrentCellChanged += RootUrlsGrid_CurrentCellChanged;
+        RootUrlsGrid.SelectedCellsChanged += RootUrlsGrid_SelectedCellsChanged;
         _recordViewSource.Source = _recordItems;
         _recordViewSource.Filter += RecordViewSource_Filter;
         RecordsGrid.ItemsSource = _recordViewSource.View;
@@ -108,6 +110,20 @@ public partial class MainWindow : Window
         }
 
         return RootUrlsGrid.CurrentItem as RootUrlStatItem;
+    }
+
+    private void RootUrlsGrid_CurrentCellChanged(object? sender, EventArgs e)
+    {
+        var selectedRootItem = GetCurrentRootSelection();
+        _selectedRootUrl = selectedRootItem?.RootURL;
+        _recordViewSource.View.Refresh();
+    }
+
+    private void RootUrlsGrid_SelectedCellsChanged(object? sender, SelectedCellsChangedEventArgs e)
+    {
+        var selectedRootItem = GetCurrentRootSelection();
+        _selectedRootUrl = selectedRootItem?.RootURL;
+        _recordViewSource.View.Refresh();
     }
 
     private void ApiBaseUrlTextBox_TextChanged(object sender, TextChangedEventArgs e)
