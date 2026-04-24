@@ -162,7 +162,7 @@
                                  Margin="0,0,8,0"
                                  Padding="10,6"
                                  VerticalContentAlignment="Center"
-                                 ToolTip="根据标题或完整 URL 关键词搜索（全局）" />
+                                 ToolTip="根据标题或完整 URL 关键词搜索（会叠加左侧 Root URL 选择）" />
                         <DatePicker x:Name="StartDatePicker"
                                     Grid.Column="1"
                                     Height="34"
@@ -213,7 +213,6 @@
                         <DataGrid.Columns>
                             <DataGridTextColumn Header="标题" Binding="{Binding DisplayTitle}" Width="320" />
                             <DataGridTextColumn Header="完整 URL" Binding="{Binding URL}" Width="520" />
-                            <DataGridTextColumn Header="Root URL" Binding="{Binding RootURL}" Width="260" />
                             <DataGridTextColumn Header="访问时间" Binding="{Binding DisplayVisitedAt}" Width="220" />
                         </DataGrid.Columns>
                     </DataGrid>
