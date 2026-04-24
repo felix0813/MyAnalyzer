@@ -85,10 +85,29 @@ public partial class MainWindow : Window
 
     private void RootUrlsGrid_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        var selectedRootItem = RootUrlsGrid.SelectedItem as RootUrlStatItem
-            ?? RootUrlsGrid.CurrentItem as RootUrlStatItem;
+        var selectedRootItem = GetCurrentRootSelection();
         _selectedRootUrl = selectedRootItem?.RootURL;
         _recordViewSource.View.Refresh();
+    }
+
+    private RootUrlStatItem? GetCurrentRootSelection()
+    {
+        if (RootUrlsGrid.SelectedItem is RootUrlStatItem selectedItem)
+        {
+            return selectedItem;
+        }
+
+        if (RootUrlsGrid.CurrentCell.Item is RootUrlStatItem currentCellItem)
+        {
+            return currentCellItem;
+        }
+
+        if (RootUrlsGrid.SelectedCells.FirstOrDefault().Item is RootUrlStatItem selectedCellItem)
+        {
+            return selectedCellItem;
+        }
+
+        return RootUrlsGrid.CurrentItem as RootUrlStatItem;
     }
 
     private void ApiBaseUrlTextBox_TextChanged(object sender, TextChangedEventArgs e)
