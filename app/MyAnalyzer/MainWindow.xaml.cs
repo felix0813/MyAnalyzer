@@ -85,7 +85,9 @@ public partial class MainWindow : Window
 
     private void RootUrlsGrid_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        _selectedRootUrl = (RootUrlsGrid.SelectedItem as RootUrlStatItem)?.RootURL;
+        var selectedRootItem = RootUrlsGrid.SelectedItem as RootUrlStatItem
+            ?? RootUrlsGrid.CurrentItem as RootUrlStatItem;
+        _selectedRootUrl = selectedRootItem?.RootURL;
         _recordViewSource.View.Refresh();
     }
 
@@ -401,6 +403,10 @@ public partial class MainWindow : Window
         KeywordTextBox.Text = string.Empty;
         StartDatePicker.SelectedDate = null;
         EndDatePicker.SelectedDate = null;
+        RootUrlsGrid.UnselectAll();
+        RootUrlsGrid.SelectedItem = null;
+        _selectedRootUrl = null;
+        _recordViewSource.View.Refresh();
         await LoadDashboardDataAsync();
     }
 
